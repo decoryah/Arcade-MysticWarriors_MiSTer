@@ -15,7 +15,9 @@
 //                      the 16 MB of streaming); the streamed load is the default
 //   PATCH=a:hh..,..    patch the image's 68000 program before it is loaded (a simulation shortcut, e.g. past the
 //                      power-on RAM / ROM check: see SKIPBOOT)
-//   SKIPBOOT=1         the patch tools/find_skipboot.py found for this program (sim/run_mw.sh passes it as PATCH)
+//   SKIPBOOT=1         sim/run_mw.sh passes tools/skipboot.txt's patch as PATCH
+//   TESTAT=n           the test switch pressed from frame n on (the service menu; held from reset it clears the EEPROM)
+//   KEYS=f:mask:len,.. player 1's inputs (mask: bit0 left .. 3 down, 4-6 buttons, 7 start) held len frames from frame f
 //   AUDIO=1            write <prefix>.wav (48 kHz stereo)
 //   TRACE=1            one line a frame in <prefix>.trace
 //   TESTSW=1           hold the test switch (IN1 bit 2, low = on)
@@ -111,6 +113,19 @@ int main(int argc, char **argv) {
     std::set<int> snaps = parse_list(getenv("SNAPFRAMES"));
     std::set<int> dumps = parse_list(getenv("DUMPSTATE"));
     int snapevery = getenv("SNAPEVERY") ? atoi(getenv("SNAPEVERY")) : 0;
+    // TESTAT=n: the test switch pressed from frame n on (the service menu); KEYS=f:mask:len,...: player 1's bits in
+    // mask (bit0 left, 1 right, 2 up, 3 down, 4-6 buttons, 7 start) held for len frames from frame f
+    int testat = getenv("TESTAT") ? atoi(getenv("TESTAT")) : -1;
+    struct key_t { int f; unsigned m; int len; };
+    std::vector<key_t> keys;
+    if (getenv("KEYS")) {
+        char *w = strdup(getenv("KEYS"));
+        for (char *t = strtok(w, ","); t; t = strtok(nullptr, ",")) {
+            key_t k{0, 0, 1};
+            if (sscanf(t, "%d:%x:%d", &k.f, &k.m, &k.len) >= 2) keys.push_back(k);
+        }
+        free(w);
+    }
     const char *sch = getenv("SCHED");
     bool survey = sch && !strcmp(sch, "survey"), play = sch && !strcmp(sch, "play");
     int schedlag = getenv("SCHEDLAG") ? atoi(getenv("SCHEDLAG")) : 0;
@@ -307,6 +322,12 @@ int main(int argc, char **argv) {
                     dut->in_p1_p2 = 0xff00 | p1;
                     dut->in0 = c;
                 }
+                if (!keys.empty()) {
+                    unsigned p1 = 0xff;
+                    for (auto &k : keys) if (frame >= k.f && frame < k.f + k.len) p1 &= ~k.m;
+                    dut->in_p1_p2 = 0xff00 | p1;
+                }
+                if (testat >= 0 && frame >= testat) dut->in1 = in1_val & ~0x04u;
                 y = 0; x = 0;
             }
             prev_vblank = dut->vblank;

@@ -41,6 +41,3 @@ __pycache__/
 dist/*
 !dist/RELEASE_NOTES_*.md
 
-# furrtek's K053252 model (SiliconRE, GPL-2.0) and its counter helper: not redistributed here, see sim/k053252/README.md
-sim/k053252/053252.v
-sim/k053252/74163.v
