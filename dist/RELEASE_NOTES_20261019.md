@@ -42,10 +42,13 @@ please treat it as a test build until it has been run on a board.
   frames (MAME's chip state dumped by a Lua probe and rendered by the core's video pipeline): the attract mode with its
   four demo cycles, scripted play through stages 1 and 2 with their bosses and the continue screen, and sampled frames
   of the other six stages. The whole machine's chip state equals MAME's at the same frame in every register and RAM
-  word (lag 0) at attract frames 60, 120 ... 900. The comparison found one bug, fixed in this build: a sprite zoom
-  register of 0 (cells 2,048 pixels across, the full-screen haze over the castle at dusk) overflowed the sprite drawer.
-- **Quartus 17.0.2:** 45 % of the ALMs (19,065), 519 of 553 M10K, 65 DSPs; every clock's slack positive (the 96 MHz
-  core clock +0.696 ns setup, +0.245 ns hold; the tightest, +0.392 ns, is in the framework's HDMI scaler).
+  word (lag 0) at attract frames 60, 120 ... 900 and in scripted play from frame 300 to 1,130 (coin, start, the ninja
+  select, the story scene). The comparison found two bugs, both fixed in this build: a sprite zoom register of 0
+  (cells 2,048 pixels across, the full-screen haze over the castle at dusk) overflowed the sprite drawer; and the
+  interrupts and the sprite list's instant had been placed by a 256-line reading of MAME's screen, which the K053252
+  replaces at boot: IRQ2 is now at raster line 240, IRQ4 at line 0 and the sprite list taken at line 249, as in MAME.
+- **Quartus 17.0.2:** 46 % of the ALMs (19,131), 519 of 553 M10K, 65 DSPs; every clock's slack positive (the 96 MHz
+  core clock +0.811 ns setup, +0.242 ns hold; the tightest, +0.040 ns, is in the framework's HDMI scaler).
   `releases/mysticwarriors_20261019.fit.summary` / `.sta.summary`.
 
 ### Controls
@@ -62,6 +65,9 @@ README.
 
 ### Known differences / open points
 
+- In play the whole machine stays frame-exact with MAME until stage 1 starts: the game's five-frame unpacking of the
+  stage takes the core's 68000 a frame less than MAME's, and from there the game runs up to two frames ahead of MAME
+  (the pictures of every state are still MAME's; the 68000 otherwise runs within 2 % of MAME's speed).
 - The comparison with MAME covers what scripted inputs reach: one player, the bosses of stages 1 and 2, sampled
   frames of every stage. Later bosses, the ending and play with two to four players are not in it.
 - Tile blending follows the current MAME (each tile with its own mix code), not MAME 0.289's rule; the game uses tile mix
