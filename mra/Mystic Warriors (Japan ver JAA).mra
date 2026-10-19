@@ -1,0 +1,96 @@
+<misterromdescription>
+    <rotation>horizontal</rotation>
+    <name>Mystic Warriors (Japan ver JAA)</name>
+    <setname>mystwarrj</setname>
+    <mameversion>0289</mameversion>
+    <year>1993</year>
+    <manufacturer>Konami</manufacturer>
+    <players>4</players>
+    <joystick>8</joystick>
+    <rbf>mysticwarriors</rbf>
+    <region>Japan</region>
+    <platform>Konami pre-GX</platform>
+
+    <!--
+      Flat image for the Mystic Warriors core (target/mister/mw_mem.sv):
+
+        0x0000000  0x200000  68000 program (0.5 MB, 0.5 MB of zeros, 1 MB: the map's 2 MB)
+        0x0200000  0x040000  Z80 sound program, 16 x 16 KB banks (the 128 KB ROM twice)
+        0x0240000  0x400000  K056832 tile ROM, 5bpp: per 8-pixel row an 8-byte group
+                             (4 chunky bytes, the fifth plane byte, 3 zero)
+        0x0640000  0x400000  K054539 PCM
+        0x0A40000  0x400000  K055673 sprite ROM, 64-bit words: a 16-pixel row of the four low planes
+        0x0E40000  0x100000  K055673 fifth plane, a 16-bit word per row (left 8 pixels, right 8)
+        0x0F40000            end
+
+      Expects the MAME 0.289 merged romset (mystwarr.zip holding the parent and the
+      four clones) or the split sets: parts are found by name, whatever folder holds them.
+    -->
+    <rom index="0" zip="mystwarrj.zip|mystwarr.zip" md5="None" address="0x32000000">
+
+        <!-- 68000 program, 16-bit big-endian words: the even byte is the first ROM -->
+        <interleave output="16">
+            <part name="128jaa01.20f" crc="49c37bfe" map="01"/>
+            <part name="128jaa02.20g" crc="e39fb3bb" map="10"/>
+        </interleave>
+        <part repeat="0x80000">00</part>
+        <interleave output="16">
+            <part name="128a03.19f" crc="e98094f3" map="01"/>
+            <part name="128a04.19g" crc="88c6a3e4" map="10"/>
+        </interleave>
+
+        <!-- Z80 sound program (ROM_RELOAD: the 128 KB twice) -->
+        <part name="128a05.6b" crc="0e5194e0"/>
+        <part name="128a05.6b" crc="0e5194e0"/>
+
+        <!--
+          K056832 tile ROM. MAME's ROM_LOADTILE_WORD is ROM_GROUPWORD|ROM_SKIP(3)|ROM_REVERSE
+          and ROM_LOADTILE_BYTE is ROM_GROUPBYTE|ROM_SKIP(4): 5-byte groups, one per 8-pixel
+          row, 4 packed-chunky bytes (the low 4 bits of the pixel) and the 5th plane's byte,
+          which holds bit 4 of each of the row's 8 pixels (pixel 0 in bit 7). Padded to 8 bytes.
+        -->
+        <interleave output="64">
+            <part name="128a08.1h" crc="63d6cfa0" map="00000012"/>
+            <part name="128a09.1k" crc="573a7725" map="00001200"/>
+            <part name="128a10.3h" crc="558e545a" map="00010000"/>
+        </interleave>
+
+        <!-- K054539 PCM samples, shared by both chips -->
+        <part name="128a06.2d" crc="88ed598c"/>
+        <part name="128a07.1d" crc="db79a66e"/>
+
+        <!--
+          K055673 sprite ROM, 64-bit words (ROM_LOAD64_WORD, 8-byte stride): one 64-bit word
+          is the four low planes of one 16-pixel row (left 8 pixels in bytes 0-3, right 8 in
+          bytes 4-7, one byte a plane).
+        -->
+        <interleave output="64">
+            <part name="128a16.22k" crc="459b6407" map="00000021"/>
+            <part name="128a15.20k" crc="6bbfedf4" map="00002100"/>
+            <part name="128a14.19k" crc="f7bd89dd" map="00210000"/>
+            <part name="128a13.17k" crc="e89b66a2" map="21000000"/>
+        </interleave>
+        <!-- the fifth plane (ROM_LOAD16_BYTE at 0x400000): per row, the left and the right 8 pixels' byte -->
+        <interleave output="16">
+            <part name="128a12.12k" crc="63de93e2" map="01"/>
+            <part name="128a11.10k" crc="4eac941a" map="10"/>
+        </interleave>
+    </rom>
+
+    <!-- the board's factory EEPROM: without it the game boots upside down with an error -->
+    <rom index="2">
+        <part>
+03 DB FC 24 91 28 4A 41 41 00 00 00 00 00 00 00
+00 00 01 01 01 01 00 00 00 00 00 00 00 00 00 00
+02 01 00 03 00 00 00 20 00 00 00 02 00 00 00 00
+00 00 00 00 28 03 01 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+        </part>
+    </rom>
+    <nvram index="2" size="128"/>
+
+    <buttons names="Button 1,Button 2,Button 3,Start,Coin" default="A,B,R,Start,Select" count="3"/>
+</misterromdescription>

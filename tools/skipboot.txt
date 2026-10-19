@@ -1,0 +1,4 @@
+# SKIPBOOT: after the video chips are set up, the reset code jumps (jmp at $00139E) to the power-on RAM / ROM
+# check at $001EE6, whose last step jumps back to $0013A4 (jmp at $001C70). Pointing the first jump at $0013A4
+# skips the check (a simulation shortcut only, never part of an image): the jmp target is the long word at $0013A0.
+13a0:000013a4
