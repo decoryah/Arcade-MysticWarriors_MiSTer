@@ -14,9 +14,9 @@
 //   vsync 8 lines, 17 lines after vblank starts, so it wraps over the frame's end
 //   (Monster Maulers' horizontal timing with a different sync position, and Violent
 //   Storm's vertical timing).
-// MAME's frame for this driver is 512 x 256 lines at the same 59.1856 Hz (set_raw(6 MHz,
-// 384, ..., 264), then set_size(512, 256)): its scanline interrupts are placed at the same
-// instants of the frame in mw_core.
+// MAME's frame is this raster once the game has programmed the K053252 (k053252_device::res_change
+// sets the screen to the chip's 384 x 264; the driver's set_size(512, 256) holds only until then), so
+// its scanline numbers are these lines (mw_core places the interrupts and the sprite list by them).
 //
 // Each visible line is rendered into the line buffers during the line before
 // it: at the start of raster line r this pulses `line_start` for line r+1,

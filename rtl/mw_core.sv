@@ -19,17 +19,19 @@
 
 module mw_core #(
     parameter string HEXDIR = "rtl/data",
-    // MAME's scanline numbers are 66 us apart in this driver (512 x 256 at 59.1856 Hz) and the board's are 64 us:
-    // the interrupts and the frame update are placed at the same instants of the frame in real time, relative to the
-    // picture's first line (MAME line 16 = raster line 16), as in the Violent Storm core (same screen configuration):
-    //   MAME line 240 (IRQ2, +14,784 us from the picture top)  -> 231 raster lines later  -> raster line 247, pixel 0
-    //   MAME line 0   (IRQ4, -1,056 us)                         -> 16.5 lines before        -> raster line 263, pixel 192
-    //   MAME's update, vblank end (+15,684 us)                  -> 245.06 lines             -> raster line 261
-    parameter int    OBJ_BUILD_LINE = 261, // raster line at which the sprite list is taken (MAME's update)
-    parameter int    IRQ2_LINE = 247,
+    // MAME's scanline numbers are this raster's lines: the driver's set_size(512, 256) holds only until the game
+    // programs the K053252 at boot, when k053252_device::res_change sets the screen to the chip's 384 x 264 raster
+    // with the picture at (24, 16), as here. Measured in MAME 0.289 (tools/lua/input_reads.lua): the IRQ4 vector is
+    // fetched 3 us into the frame, the IRQ2 vector 15,363 us (line 240), the frame update 15,960 us. So:
+    //   IRQ2 at line 240, pixel 0 (vblank start); IRQ4 at line 0, pixel 0;
+    //   MAME's screen update, which takes the sprite list, at vblank end: set_vblank_time(600 us) after line 240,
+    //   3,600 pixel periods = line 249, pixel 144
+    parameter int    OBJ_BUILD_LINE = 249, // where the sprite list is taken (MAME's update)
+    parameter int    OBJ_BUILD_HPOS = 144,
+    parameter int    IRQ2_LINE = 240,
     parameter int    IRQ2_HPOS = 0,
-    parameter int    IRQ4_LINE = 263,
-    parameter int    IRQ4_HPOS = 192,      // half a line: 0.5 x 384 pixels
+    parameter int    IRQ4_LINE = 0,
+    parameter int    IRQ4_HPOS = 0,
     parameter int    STEP_COST_BUS = 16,   // 68000 pacing (mw_main)
     parameter int    STEP_COST_INT = 8
 ) (
@@ -262,7 +264,7 @@ module mw_core #(
     assign dbg_unsupported = tm_unsup | ol_overflow;
 
     // The sprite table the renderers work from is a copy of the sprite RAM taken at
-    // OBJ_BUILD_LINE, as MAME's list is taken at its update: the game writes its table during the visible frame
+    // (OBJ_BUILD_LINE, OBJ_BUILD_HPOS), as MAME's list is taken at its update: the game writes its table during the visible frame
     // as well, and a renderer reading the live RAM line by line saw entries half updated. The copy takes 2,048
     // clocks; the list is built from it after that.
     logic [15:0] sram_copy [2048];
@@ -287,7 +289,7 @@ module mw_core #(
             end
         end
         if (!reset && cen_pix) begin
-            if (vcount == 9'(OBJ_BUILD_LINE) && hcount == 9'd0 && build_armed) begin
+            if (vcount == 9'(OBJ_BUILD_LINE) && hcount == 9'(OBJ_BUILD_HPOS) && build_armed) begin
                 copy_start <= 1'b1; build_armed <= 1'b0;
             end
             if (vcount != 9'(OBJ_BUILD_LINE)) build_armed <= 1'b1;

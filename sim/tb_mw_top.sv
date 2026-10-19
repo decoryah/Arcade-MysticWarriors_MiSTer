@@ -7,10 +7,7 @@
 
 module tb_mw_top #(
     parameter int STEP_COST_BUS = 16,
-    parameter int STEP_COST_INT = 8,
-    parameter int OBJ_BUILD_LINE = 261,
-    parameter int IRQ2_LINE = 247,
-    parameter int IRQ4_LINE = 263
+    parameter int STEP_COST_INT = 8     // the interrupts and the sprite list's instant are mw_core's (MAME's)
 ) (
     input  logic        clk,
     input  logic        reset,          // the platform's reset: SDRAM init and the machine
@@ -92,8 +89,7 @@ module tb_mw_top #(
 
     // the machine waits for the memories and for the image, as MysticWarriors.sv does
     wire core_reset = reset | ~mem_ready | dl_hold;
-    mw_core #(.HEXDIR("../rtl/data"), .STEP_COST_BUS(STEP_COST_BUS), .STEP_COST_INT(STEP_COST_INT),
-              .OBJ_BUILD_LINE(OBJ_BUILD_LINE), .IRQ2_LINE(IRQ2_LINE), .IRQ4_LINE(IRQ4_LINE)) u_core (
+    mw_core #(.HEXDIR("../rtl/data"), .STEP_COST_BUS(STEP_COST_BUS), .STEP_COST_INT(STEP_COST_INT)) u_core (
         .clk(clk), .reset(core_reset), .vid_reset(reset),
         .prog_req(prog_req), .prog_addr(prog_addr), .prog_ack(prog_ack), .prog_q(prog_q),
         .tile_req(tile_req), .tile_addr(tile_addr), .tile_ack(tile_ack), .tile_q(tile_q),
