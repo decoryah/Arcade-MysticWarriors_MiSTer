@@ -11,6 +11,8 @@
 //   SNAPEVERY=n        ... and every n-th frame
 //   SCHED=survey|play  scripted inputs (coin, start, buttons), by frame
 //   SCHEDLAG=n         apply the SCHED inputs n frames later
+//   SCHEDLINE=n        apply the SCHED / KEYS inputs at raster line n after the frame's end, not at the end (261:
+//                      where MAME's frame notifier, and so tools/lua/dump_state.lua's SCHEDULE, applies them)
 //   BACKDOOR=1         place the image straight into the SDRAM model (the loader's address arithmetic, without
 //                      the 16 MB of streaming); the streamed load is the default
 //   PATCH=a:hh..,..    patch the image's 68000 program before it is loaded (a simulation shortcut, e.g. past the
@@ -22,6 +24,8 @@
 //   TRACE=1            one line a frame in <prefix>.trace
 //   TESTSW=1           hold the test switch (IN1 bit 2, low = on)
 //   DUMPSTATE=a,b,c    at the end of those frames, write the video chips' registers and RAMs to <prefix>.state_<N>.txt
+//   DUMPLINE=n         ... at raster line n after the frame's end instead (261: the instant of MAME's frame update,
+//                      where tools/lua/dump_state.lua takes its states, mw_core OBJ_BUILD_LINE)
 //   ROMCHK=1           compare every tile / sprite read the renderers complete with the image
 #include "Vtb_mw_top.h"
 #include "Vtb_mw_top___024root.h"
@@ -112,6 +116,7 @@ int main(int argc, char **argv) {
 
     std::set<int> snaps = parse_list(getenv("SNAPFRAMES"));
     std::set<int> dumps = parse_list(getenv("DUMPSTATE"));
+    const int dumpline = getenv("DUMPLINE") ? atoi(getenv("DUMPLINE")) : -1;
     int snapevery = getenv("SNAPEVERY") ? atoi(getenv("SNAPEVERY")) : 0;
     // TESTAT=n: the test switch pressed from frame n on (the service menu); KEYS=f:mask:len,...: player 1's bits in
     // mask (bit0 left, 1 right, 2 up, 3 down, 4-6 buttons, 7 start) held for len frames from frame f
@@ -129,6 +134,7 @@ int main(int argc, char **argv) {
     const char *sch = getenv("SCHED");
     bool survey = sch && !strcmp(sch, "survey"), play = sch && !strcmp(sch, "play");
     int schedlag = getenv("SCHEDLAG") ? atoi(getenv("SCHEDLAG")) : 0;
+    const int schedline = getenv("SCHEDLINE") ? atoi(getenv("SCHEDLINE")) : -1;
     bool want_audio = getenv("AUDIO") && atoi(getenv("AUDIO"));
     FILE *tr = (getenv("TRACE") && atoi(getenv("TRACE"))) ? fopen((prefix + ".trace").c_str(), "w") : nullptr;
     // PCLOG=n: the 68000's first n opcode fetches (a run of the same few addresses, a loop, is written once)
@@ -233,6 +239,19 @@ int main(int argc, char **argv) {
     bool romchk = getenv("ROMCHK") && atoi(getenv("ROMCHK"));
     unsigned long long chk_n[2] = {0, 0}, chk_bad[2] = {0, 0};
     bool prev_tack = false, prev_sack = false;
+    // the scripted inputs for the frame just ended
+    auto apply_inputs = [&]() {
+        if (survey || play) {
+            unsigned p1, c; sched(frame - schedlag, p1, c);
+            dut->in_p1_p2 = 0xff00 | p1;
+            dut->in0 = c;
+        }
+        if (!keys.empty()) {
+            unsigned p1 = 0xff;
+            for (auto &k : keys) if (frame >= k.f && frame < k.f + k.len) p1 &= ~k.m;
+            dut->in_p1_p2 = 0xff00 | p1;
+        }
+    };
     while (frame < frames) {
         tick();
         if (romchk) {
@@ -259,7 +278,14 @@ int main(int argc, char **argv) {
         }
         if (want_audio && dut->snd_valid) { audio.push_back((short)dut->snd_l); audio.push_back((short)dut->snd_r); }
         if (dut->dbg_zstep) zsteps++;
-        if (dut->dbg_vcount != vc_last) { vc_last = dut->dbg_vcount; if (dut->dbg_overrun) overruns++; }
+        if (dut->dbg_vcount != vc_last) {
+            vc_last = dut->dbg_vcount; if (dut->dbg_overrun) overruns++;
+            if (schedline >= 0 && (int)vc_last == schedline && frame > 0) apply_inputs();
+            if (dumpline >= 0 && (int)vc_last == dumpline && dumps.count(frame)) {
+                char path[512]; snprintf(path, sizeof path, "%s.state_%d.txt", prefix.c_str(), frame);
+                dump_state(path, frame);
+            }
+        }
         if (dut->dbg_overrun_line) {
             ovl_events++;
             if (ovl_n < 4) { ovl_line[ovl_n] = dut->dbg_vcount; ovl_src[ovl_n] = dut->dbg_overrun_src; ovl_n++; }
@@ -309,7 +335,7 @@ int main(int argc, char **argv) {
                     char path[512]; snprintf(path, sizeof path, "%s.f%d.rgb", prefix.c_str(), frame);
                     FILE *o = fopen(path, "wb"); if (o) { fwrite(fb.data(), 4, fb.size(), o); fclose(o); }
                 }
-                if (dumps.count(frame)) {
+                if (dumpline < 0 && dumps.count(frame)) {
                     char path[512]; snprintf(path, sizeof path, "%s.state_%d.txt", prefix.c_str(), frame);
                     dump_state(path, frame);
                 }
@@ -317,16 +343,7 @@ int main(int argc, char **argv) {
                     double mcps = (double)(cycles - ck0) / 1e6;
                     printf("frame %d (%.1f M clocks)\n", frame, mcps); fflush(stdout);
                 }
-                if (survey || play) {
-                    unsigned p1, c; sched(frame - schedlag, p1, c);
-                    dut->in_p1_p2 = 0xff00 | p1;
-                    dut->in0 = c;
-                }
-                if (!keys.empty()) {
-                    unsigned p1 = 0xff;
-                    for (auto &k : keys) if (frame >= k.f && frame < k.f + k.len) p1 &= ~k.m;
-                    dut->in_p1_p2 = 0xff00 | p1;
-                }
+                if (schedline < 0) apply_inputs();
                 if (testat >= 0 && frame >= testat) dut->in1 = in1_val & ~0x04u;
                 y = 0; x = 0;
             }
