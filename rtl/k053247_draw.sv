@@ -173,7 +173,9 @@ module k053247_draw #(
     logic signed [17:0] ox, oy, sy, sx, pxl, pxr, cur_px;
     logic  [3:0] width, height;
     logic  [2:0] ty, tx, xa, ya;
-    logic [23:0] yacc, xacc, stride_x, stride_y;
+    // the cells' running offsets: up to 7 x 0x800000 (zoom register 0, 2,048-pixel cells) plus a cell, 27 bits
+    logic [26:0] yacc, xacc;
+    logic [23:0] stride_x, stride_y;
     logic [12:0] zh, zw;
     logic [31:0] ddax;
     logic  [7:0] color;
@@ -216,15 +218,15 @@ module k053247_draw #(
     wire signed [17:0] goy = oy3 - $signed({4'd0, ghshift[13:0]});
 
     // ------------------------------------------------------ tile row / column
-    wire [23:0] ysum0 = yacc + 24'd2048;
-    wire [23:0] ysum1 = yacc + zoomy + 24'd2048;
-    wire signed [17:0] sy_c = oy + $signed({6'd0, ysum0[23:12]});
-    wire [12:0] zh_c = nozoom ? 13'd16 : (ysum1[23:12] - ysum0[23:12]);
+    wire [26:0] ysum0 = yacc + 27'd2048;
+    wire [26:0] ysum1 = yacc + {3'd0, zoomy} + 27'd2048;
+    wire signed [17:0] sy_c = oy + $signed({3'd0, ysum0[26:12]});
+    wire [12:0] zh_c = nozoom ? 13'd16 : 13'(ysum1[26:12] - ysum0[26:12]);
 
-    wire [23:0] xsum0 = xacc + 24'd2048;
-    wire [23:0] xsum1 = xacc + zoomx + 24'd2048;
-    wire signed [17:0] sx_c = ox + $signed({6'd0, xsum0[23:12]});
-    wire [12:0] zw_c = nozoom ? 13'd16 : (xsum1[23:12] - xsum0[23:12]);
+    wire [26:0] xsum0 = xacc + 27'd2048;
+    wire [26:0] xsum1 = xacc + {3'd0, zoomx} + 27'd2048;
+    wire signed [17:0] sx_c = ox + $signed({3'd0, xsum0[26:12]});
+    wire [12:0] zw_c = nozoom ? 13'd16 : 13'(xsum1[26:12] - xsum0[26:12]);
 
     // mirroring, per k053247_draw_yxloop_gx
     wire [3:0] tx2 = {1'b0, tx} << 1;
@@ -256,7 +258,7 @@ module k053247_draw #(
     // registered steps (as one clock the multiply missed the cold corner)
     wire [8:0] line_a = line - 9'(LINE_OFS);      // the row's absolute y, where the sprites' positions are
     wire signed [17:0] lsy = $signed({9'd0, line_a}) - sy;
-    logic  [8:0] lsy_r;
+    logic [10:0] lsy_r;                  // the line's offset into its cell: a cell is up to 2,048 lines
     logic [32:0] ymul_r;
     wire  [3:0] yoff = ymul_r[22:19];
 
@@ -266,8 +268,8 @@ module k053247_draw #(
     // the first drawn pixel's offset into the column, then its source
     // position: a subtract and a multiply, one state each (together they
     // were a -2.2 ns path at 96 MHz)
-    logic [9:0] pxoff;
-    wire [33:0] xmul = {24'd0, pxoff} * {10'd0, stride_x};
+    logic [10:0] pxoff;
+    wire [34:0] xmul = {24'd0, pxoff} * {11'd0, stride_x};
 
     wire row_covers  = (zh != 13'd0) && (lsy >= 18'sd0) && (lsy < $signed({5'd0, zh}))
                     && (sy <= CBS) && ((sy + $signed({5'd0, zh}) - 18'sd1) >= CTS);
@@ -442,12 +444,12 @@ module k053247_draw #(
                     end else if (ty == height[2:0] - 3'd1) begin
                         st <= D_NEXTOBJ;
                     end else begin
-                        ty <= ty + 3'd1; yacc <= yacc + zoomy; st <= D_TY;
+                        ty <= ty + 3'd1; yacc <= yacc + {3'd0, zoomy}; st <= D_TY;
                     end
                 end
-                D_SY1: begin lsy_r <= lsy[8:0]; st <= D_SY2; end
-                D_SY2: begin stride_y <= recip_q; st <= D_SY3; end
-                D_SY3: begin ymul_r <= {24'd0, lsy_r} * {9'd0, stride_y}; st <= D_SY4; end
+                D_SY1: begin lsy_r <= lsy[10:0]; st <= D_SY2; end
+                D_SY2: begin stride_y <= zh[11] ? 24'h001000 : recip_q; st <= D_SY3; end   // 2,048: 0x800000 / 2048, past the table
+                D_SY3: begin ymul_r <= 33'({22'd0, lsy_r} * {9'd0, stride_y}); st <= D_SY4; end
                 D_SY4: begin
                     src_row <= fy ? (~yoff) : yoff;
                     tx <= 3'd0; xacc <= '0;
@@ -470,12 +472,12 @@ module k053247_draw #(
                 end
                 D_SX1: st <= D_SX2;
                 D_SX2: begin
-                    stride_x <= recip_q;
+                    stride_x <= zw[11] ? 24'h001000 : recip_q;    // a 2,048-pixel cell (zoom register 0) is past the table
                     pxl <= pxl_c; pxr <= pxr_c;
                     st <= D_SX2B;
                 end
                 D_SX2B: begin
-                    pxoff <= 10'(pxl - sx);      // at most a tile column's width
+                    pxoff <= 11'(pxl - sx);      // at most a cell's width less one: 2,047
                     st <= D_SX3;
                 end
                 D_SX3: begin
@@ -526,7 +528,7 @@ module k053247_draw #(
 
                 D_NEXTTX: begin
                     if (tx == width[2:0] - 3'd1) st <= D_NEXTOBJ;
-                    else begin tx <= tx + 3'd1; xacc <= xacc + zoomx; st <= D_TX; end
+                    else begin tx <= tx + 3'd1; xacc <= xacc + {3'd0, zoomx}; st <= D_TX; end
                 end
 
                 D_NEXTOBJ: begin
