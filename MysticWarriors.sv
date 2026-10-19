@@ -101,8 +101,8 @@ localparam CONF_STR = {
 	"O[10],SDRAM read capture,Normal,Late;",
 	"-;",
 	"R0,Reset;",
-	"J1,Button 1,Button 2,Button 3,Start,Coin;",
-	"jn,A,B,R,Start,Select;",
+	"J1,Shoot,Jump,Start,Coin;",
+	"jn,A,B,Start,Select;",
 	"V,v",`BUILD_DATE
 };
 
@@ -194,14 +194,15 @@ always @(posedge clk_sys) begin
 	end
 end
 
-// joystick bits: 0 right, 1 left, 2 down, 3 up, 4-6 buttons 1-3, 7 start, 8 coin
+// joystick bits: 0 right, 1 left, 2 down, 3 up, 4 shoot, 5 jump, 6 start, 7 coin. The game uses two buttons: its I/O
+// CHECK lists LEFT, RIGHT, UP, DOWN, SHOOT, JUMP, START for each player; the harness's button 3 is read by nothing
 wire [31:0] joy [4];
 assign joy[0] = joystick_0; assign joy[1] = joystick_1; assign joy[2] = joystick_2; assign joy[3] = joystick_3;
 
 // a player's byte as the board's input words carry it, active low (MAME's KONAMI16_LSB / MSB):
-//   bit0 left, 1 right, 2 up, 3 down, 4-6 buttons 1-3, 7 start
+//   bit0 left, 1 right, 2 up, 3 down, 4 button 1 (shoot), 5 button 2 (jump), 6 button 3 (released), 7 start
 function automatic [7:0] pbyte(input [31:0] j, input kstart);
-	pbyte = ~{j[7] | kstart, j[6], j[5], j[4], j[2], j[3], j[0], j[1]};
+	pbyte = ~{j[6] | kstart, 1'b0, j[5], j[4], j[2], j[3], j[0], j[1]};
 endfunction
 
 wire        test_sw = status[6] | key_test;
@@ -210,7 +211,7 @@ wire [15:0] in_p1_p2 = {pbyte(joy[1], key_start[1]), pbyte(joy[0], key_start[0])
 wire [15:0] in_p3_p4 = {pbyte(joy[3], key_start[3]), pbyte(joy[2], key_start[2])};
 //   496000: coin 1-4 (bits 3:0), bits 7:4 unassigned: all active low
 wire  [7:0] in0      = ~{4'b0000,
-                         joy[3][8] | key_coin[3], joy[2][8] | key_coin[2], joy[1][8] | key_coin[1], joy[0][8] | key_coin[0]};
+                         joy[3][7] | key_coin[3], joy[2][7] | key_coin[2], joy[1][7] | key_coin[1], joy[0][7] | key_coin[0]};
 //   496002 (low byte): bits 1:0 the EEPROM's DO / READY (replaced in the core), bit 2 the test switch (low = on),
 //   bit 3 an input the game loops on while it is set (0), then SW1: bit 4 sound output (0 stereo), bit 5 coin
 //   mechanism (1 common), bit 6 number of players (1 = 2, 0 = 4), bit 7 unused (1)

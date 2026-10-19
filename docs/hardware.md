@@ -97,6 +97,9 @@ level. The level 6 vector (`$003488`) exists but MAME does not raise it ("almost
 ### Inputs
 
 `P1_P2` / `P3_P4`: each byte a player: bit 0 left, 1 right, 2 up, 3 down, 4-6 buttons 1-3, 7 start (active low).
+The game uses buttons 1 and 2 only: its I/O CHECK (the strings at `$056400`) lists LEFT, RIGHT, UP, DOWN, SHOOT, JUMP,
+START and SERVICE per player. MAME wires three buttons (`KONAMI16_LSB(n, IPT_BUTTON3, ...)`), the harness's generic
+layout; the core offers Shoot and Jump and holds bit 6 released.
 `IN1` SW1: bit 4 sound output (1 = mono), bit 5 coin mechanism (1 = common), bit 6 number of players (1 = 2, 0 = 4),
 bit 7 unused.
 

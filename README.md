@@ -47,8 +47,10 @@ verified" for exactly what has been checked and how, and "Known differences / op
 | SDRAM read capture | Normal, Late | For a module that answers slowly |
 | Reset | | Restarts the machine |
 
-On a gamepad the default mapping is A / B / R for buttons 1 / 2 / 3, Start for Start and Select for Coin; up to four
-joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for the test switch.
+The game has two buttons, **Shoot** (the attack: thrown shuriken or daggers, the hand weapon up close) and **Jump**: the game's own I/O CHECK lists
+LEFT, RIGHT, UP, DOWN, SHOOT, JUMP and START for each player, and the board's third button input is read by nothing, so
+the core does not offer it. On a gamepad the default mapping is A for Shoot, B for Jump, Start for Start and Select for
+Coin; up to four joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for the test switch.
 
 ## What differs from the cores it is built on
 
