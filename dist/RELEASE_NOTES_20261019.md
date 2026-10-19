@@ -28,8 +28,9 @@ please treat it as a test build until it has been run on a board.
   of MAME's snapshots of the game; the interrupts (IRQ2 / IRQ4 enabled by the game through the IRQ control byte, taken
   every frame); the music in stereo from the first second; over 900 frames, 1.68 M tile and 27,280 sprite ROM reads
   compared with the image (0 wrong) and no renderer overrun. With scripted inputs: coin, start, SELECT NINJA, the
-  story scene in the dojo (1,000 frames, no overrun). The service menu's MASK ROM CHECK: the tile ROMs 1H, 1K and 3H
-  OK (the sprite and PCM ROMs were not yet through in the bench).
+  story scene in the dojo and the start of stage 1 (the BMR street, the player blinking in, shuriken and a crate
+  broken; 1,300 frames, no overrun). The service menu's MASK ROM CHECK: the tile ROMs 1H, 1K and 3H OK (the sprite and
+  PCM ROMs were not yet through in the bench).
 - **The MiSTer top level end to end** (`sim/emu/run_emu.sh`, the framework's own video path): the fast load replayed from
   the DDR3 and every one of the 7.47 M SDRAM words compared with the image (0 wrong), the frame period exactly
   1,622,016 clocks (59.1856 Hz), 224 rows of 288 pixels, the EEPROM read back through the save path.
