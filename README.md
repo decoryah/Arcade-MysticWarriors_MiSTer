@@ -8,8 +8,9 @@ picture at a 6 MHz pixel clock.
 
 No ROMs or other copyrighted data are in this repository; you supply your own MAME `mystwarr.zip`.
 
-**Status.** New core: built, simulated with the real game programs, **not yet tested on a MiSTer**. See "What is
-verified" for exactly what has been checked and how, and "Known differences / open points" for what has not.
+**Status.** First release (20261019): **tested on a real MiSTer by the repository owner, and it works**; simulated with
+the real game programs and compared with MAME 0.289 frame for frame. See "What is verified" for exactly what has been
+checked and how, and "Known differences / open points" for what has not.
 
 ## Install
 
@@ -78,10 +79,10 @@ Coin; up to four joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for th
 | Whole machine | `sim/run_mw.sh`: the real 68000 and Z80 programs from reset through `mw_mem`, the SDRAM controller and a behavioural SDRAM. The game's own power-on **ROM RAM CHECK passes every item** (the RAMs, the program and sound ROMs, the EEPROM: "VER. EA A"), then the intro ("Beware of 'SKULL' enterprise on!", its red flash and fade, the dusk city and the Skull castle with its parallax scroll) and, with a coin from the scripted inputs, the title screen with the five ninjas. The title screen's text rows and the HUD (1UP / HIGH SCORE / 2UP frames and digits) sit at exactly the pixel rows and columns of MAME's snapshots of the game. Over 900 frames: 1.68 M tile and 27,280 sprite ROM reads by the renderers compared with the image, 0 wrong; no line overran; IRQ2 and IRQ4 in every frame once the game enables them; the music plays in stereo from the first second. With scripted inputs: coin, start, the SELECT NINJA screen, a ninja chosen, the story scene in the dojo that follows and the start of stage 1 (the BMR street with its START banner and the 1UP arrow, the player blinking in on alternate frames, shuriken thrown and a crate broken; 1,300 frames, no line overran). The service menu (test switch): the MAIN MENU, and its **MASK ROM CHECK reports all twelve ROMs OK**: the tile ROMs 1H, 1K and 3H read through the K056832's ROM window at `680000` (both its modes and the bank register), the sprite ROMs 10K, 12K, 17K, 19K, 20K and 22K through the K055673's window at `482000` (this board's 4 MB + 1 MB layout), and the PCM ROMs 1D and 2D, each against the checksums in the game's program (3,300 frames) |
 | MiSTer top level | `sim/emu/run_emu.sh`: `MysticWarriors.sv` itself with the framework's video path: the fast load replayed from the DDR3 and all 7.47 M SDRAM words compared with the image (0 wrong), frame period exactly 1,622,016 clocks (59.1856 Hz), 224 rows of 288 pixels starting 79 pixels after the hsync pulse, the EEPROM read back through the save path. Every Scale mode asks the scaler for the size the framework's rule gives (at 1080p V-Integer 1194 x 896, HV-Integer and Narrower 1152 x 896, HV-Integer+ 1440 x 896; at 4K 2592 x 2016 and 2880 x 2016; HV-Integer with Full Screen 1728 x 896); with HQ2x, CRT 25 % and MiSTer.ini's forced_scandoubler the monitor gets 448 rows in 528 lines a frame (CRT 25 % and forced_scandoubler hand the scaler the plain picture unchanged, HQ2x its filtered one); CRT Adjust at zero gives the picture and raster of CRT Adjust off, byte for byte, and with amounts set the frame period stays whole |
 | Quartus | Quartus Prime Lite 17.0.2 compiles the project for the 5CSEBA6U23I7: 46 % of the ALMs (19,131), 519 of 553 M10K, 65 DSPs; every clock's slack positive (the 96 MHz core clock +0.811 ns setup / +0.242 ns hold; `releases/*.summary`) |
+| On a real MiSTer | `releases/mysticwarriors_20261019.rbf` with the MRAs of `mra/`: tested by the repository owner, and it works |
 
 ## Known differences / open points
 
-* Not yet tested on a real MiSTer.
 * In play, the whole machine stays frame-exact with MAME only until stage 1 starts: the game's five-frame unpacking of
   the stage takes the core's 68000 a frame less than MAME's, and from there the core is up to two frames ahead (its
   68000 otherwise runs within 2 % of MAME's speed; `docs/hardware.md`, section 8). The pictures of every state are

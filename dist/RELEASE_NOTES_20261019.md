@@ -3,21 +3,26 @@
 Konami's **Mystic Warriors** (1993, GX128 "pre-GX" hardware), the four-player ninja beat-'em-up, with five MRAs: World
 (EAA), USA (UAA), Japan (JAA) and Asia (AAB, AAA).
 
-**First build. Not yet tested on a real MiSTer.** It was compiled with Quartus 17.0.2 and checked in simulation (below);
-please treat it as a test build until it has been run on a board.
+**First release. Tested on a real MiSTer by the repository owner: it works.** It was also checked in simulation and
+against MAME 0.289, frame for frame (below).
 
 ### Install
 
-1. Copy `releases/mysticwarriors_20261019.rbf` to `_Arcade/cores/` and the five `.mra` files from `mra/` to `_Arcade/` on
-   the SD card.
+1. Unzip `MysticWarriors_MiSTer_20261019.zip` over the root of the SD card. It adds the five MRAs to `_Arcade/` and
+   `_Arcade/cores/mysticwarriors_20261019.rbf`.
 2. Put your own MAME 0.289 romset `mystwarr.zip` in `games/mame/`. The merged set holds all versions; the clone zips
    (`mystwarru.zip`, `mystwarrj.zip`, `mystwarra.zip`, `mystwarraa.zip`) work next to the parent. No ROMs are included.
 3. Start the game from the Arcade menu. The ROM image is about 15 MB: with a recent Main_MiSTer it is copied to the DDR3
-   in one go (the MRAs' `address=` attribute), with an older one it is streamed. The game's own power-on RAM / ROM check
-   then runs, as on the board.
+   in one go and loads in about a second (the MRAs' `address=` attribute), with an older one it is streamed, with the
+   same RBF and MRAs. To see which load you got, switch on the Diagnostic overlay: the *download* square is lit for about
+   a second with fast loading and for the whole, much longer streamed load without. The game's own power-on RAM / ROM
+   check then runs, as on the board. Its settings and high scores are kept in the EEPROM, which MiSTer saves.
+
+The OSD's version line reads `v261019`.
 
 ### Checked
 
+- **On a real MiSTer:** this RBF with these MRAs was tested by the repository owner, and it works.
 - **ROM path:** `tools/mw_rom.py` rebuilds MAME's memory regions from the zip by MAME's own loading rules
   (`ROM_LOADTILE_WORD`, `ROM_LOAD64_WORD`, ...) and compares them with the image each MRA builds: all five sets
   identical in every region.
