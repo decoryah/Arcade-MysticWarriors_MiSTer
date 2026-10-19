@@ -32,11 +32,26 @@ please treat it as a test build until it has been run on a board.
   broken; 1,300 frames, no overrun). The service menu's MASK ROM CHECK: the tile ROMs 1H, 1K and 3H OK (the sprite and
   PCM ROMs were not yet through in the bench).
 - **The MiSTer top level end to end** (`sim/emu/run_emu.sh`, the framework's own video path): the fast load replayed from
-  the DDR3 and every one of the 7.47 M SDRAM words compared with the image (0 wrong), the frame period exactly
-  1,622,016 clocks (59.1856 Hz), 224 rows of 288 pixels, the EEPROM read back through the save path.
-- **Quartus 17.0.2:** 46 % of the ALMs (19,118), 519 of 553 M10K, 65 DSPs; every clock's slack positive (the 96 MHz
-  core clock +0.629 ns setup, +0.245 ns hold; the tightest, +0.274 ns, is in the framework's HDMI scaler).
+  the DDR3 in 0.65 s and every one of the 7.47 M SDRAM words compared with the image (0 wrong), the frame period exactly
+  1,622,016 clocks (59.1856 Hz), 224 rows of 288 pixels, the EEPROM read back through the save path; every Scale mode
+  at 1080p and 4K and with Full Screen (the size asked of the scaler equal to the framework's rule), HQ2x, CRT 25 % and
+  forced_scandoubler (448 rows in 528 lines a frame, so the scandoubler's output has frames), CRT Adjust at zero
+  identical to CRT Adjust off and with amounts a whole frame period.
+- **The picture against MAME 0.289, frame for frame:** 678 of 678 frames pixel-identical to MAME's snapshots of the same
+  frames (MAME's chip state dumped by a Lua probe and rendered by the core's video pipeline): the attract mode with its
+  four demo cycles, scripted play through stages 1 and 2 with their bosses and the continue screen, and sampled frames
+  of the other six stages. The whole machine's chip state equals MAME's at the same frame in every register and RAM
+  word (lag 0) at attract frames 60, 120 ... 900. The comparison found one bug, fixed in this build: a sprite zoom
+  register of 0 (cells 2,048 pixels across, the full-screen haze over the castle at dusk) overflowed the sprite drawer.
+- **Quartus 17.0.2:** 45 % of the ALMs (19,065), 519 of 553 M10K, 65 DSPs; every clock's slack positive (the 96 MHz
+  core clock +0.696 ns setup, +0.245 ns hold; the tightest, +0.392 ns, is in the framework's HDMI scaler).
   `releases/mysticwarriors_20261019.fit.summary` / `.sta.summary`.
+
+### Controls
+
+Two buttons, **Shoot** and **Jump** (A and B on a gamepad by default), Start and Coin, up to four players: the game's
+own I/O CHECK lists LEFT, RIGHT, UP, DOWN, SHOOT, JUMP and START for each player. The board's third button input is read
+by nothing, so the core and the MRAs do not offer it. Keyboard: 1-4 start, 5-8 coin, F2 the test switch.
 
 ### OSD
 
@@ -46,9 +61,13 @@ README.
 
 ### Known differences / open points
 
-- No frame-for-frame comparison with MAME yet (no MAME was at hand for this build).
-- Tile blending follows the current MAME (each tile with its own mix code), not MAME 0.289's rule.
-- SHDPRISEL's shadow conditions 1 and 2 are not modelled.
+- The comparison with MAME covers what scripted inputs reach: one player, the bosses of stages 1 and 2, sampled
+  frames of every stage. Later bosses, the ending and play with two to four players are not in it.
+- Tile blending follows the current MAME (each tile with its own mix code), not MAME 0.289's rule; the game uses tile mix
+  code 1 only and no sprite or additive mix codes, so the two rules give the same picture everywhere the comparison
+  reached.
+- SHDPRISEL's shadow conditions 1 and 2 are not modelled; the game does not use them (SHDPRISEL is 0x3F in every
+  compared frame with shadows).
 
 ### Credits
 
