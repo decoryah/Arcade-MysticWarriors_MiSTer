@@ -71,6 +71,8 @@ Coin; up to four joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for th
 |---|---|
 | ROM path | `tools/mw_rom.py` rebuilds MAME's regions from `mystwarr.zip` by MAME's own loading rules and compares them with the image built from each MRA: all five sets identical in every region |
 | Lint | Verilator `-Wall` over the machine and the memory subsystem (`sim/lint.sh`) |
+| Video against MAME 0.289 | **678 of 678 frozen-state corpus frames pixel-identical** to MAME 0.289's snapshots of the same frames: the attract mode (the intro, the title, the castle at dusk with its full-screen haze, four demo cycles on the snow mountain and in the jungle), scripted play through stage 1, its boss, the continue screen and stage 2 (to frame 72,000), and the other six stages entered through the game's stage byte. MAME's chip state is dumped by `tools/lua/dump_state.lua` and rendered by the video pipeline in `sim/run_frames.sh` (`docs/hardware.md`, section 8). Also with the line budget enforced and the ROMs answering 34 / 48 clocks late: identical, no late line. The comparison found one bug, fixed: sprites at zoom register 0 (2,048-pixel cells, the haze) |
+| Whole machine against MAME 0.289 | The system bench's chip state at raster line 249, pixel 144 (the instant of MAME's frame update) equals MAME's at the same frame in every register, palette, sprite RAM and tile RAM word, **frame for frame (lag 0)**, and its next picture equals MAME's snapshot: the attract mode at frames 60, 120 ... 900, and scripted play (coin, start, the ninja select, the story scene) from frame 300 to 1,130. The comparison moved IRQ2, IRQ4 and the sprite list's instant to MAME's raster lines (240, 0 and 249) |
 | Whole machine | `sim/run_mw.sh`: the real 68000 and Z80 programs from reset through `mw_mem`, the SDRAM controller and a behavioural SDRAM. The game's own power-on **ROM RAM CHECK passes every item** (the RAMs, the program and sound ROMs, the EEPROM: "VER. EA A"), then the intro ("Beware of 'SKULL' enterprise on!", its red flash and fade, the dusk city and the Skull castle with its parallax scroll) and, with a coin from the scripted inputs, the title screen with the five ninjas. The title screen's text rows and the HUD (1UP / HIGH SCORE / 2UP frames and digits) sit at exactly the pixel rows and columns of MAME's snapshots of the game. Over 900 frames: 1.68 M tile and 27,280 sprite ROM reads by the renderers compared with the image, 0 wrong; no line overran; IRQ2 and IRQ4 in every frame once the game enables them; the music plays in stereo from the first second. With scripted inputs: coin, start, the SELECT NINJA screen, a ninja chosen, the story scene in the dojo that follows and the start of stage 1 (the BMR street with its START banner and the 1UP arrow, the player blinking in on alternate frames, shuriken thrown and a crate broken; 1,300 frames, no line overran). The service menu (test switch): the MAIN MENU, and its **MASK ROM CHECK reports 1H, 1K and 3H (the tile ROMs) OK**, read through the K056832's ROM window at `680000` (both its modes and the bank register) against the checksums in the game's program |
 | MiSTer top level | `sim/emu/run_emu.sh`: `MysticWarriors.sv` itself with the framework's video path: the fast load replayed from the DDR3 and all 7.47 M SDRAM words compared with the image (0 wrong), frame period exactly 1,622,016 clocks (59.1856 Hz), 224 rows of 288 pixels starting 79 pixels after the hsync pulse, the EEPROM read back through the save path |
 | Quartus | Quartus Prime Lite 17.0.2 compiles the project for the 5CSEBA6U23I7: 46 % of the ALMs (19,118), 519 of 553 M10K, 65 DSPs; every clock's slack positive (the 96 MHz core clock +0.629 ns setup / +0.245 ns hold; `releases/*.summary`) |
@@ -78,15 +80,22 @@ Coin; up to four joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for th
 ## Known differences / open points
 
 * Not yet tested on a real MiSTer.
-* No frame-for-frame comparison with MAME has been made for this core yet (the other cores' frozen-state corpus and
-  MAME Lua probes need a MAME installation; the benches are in place). The comparisons so far are against MAME's
-  published snapshots of the game (positions of the text and HUD), not against MAME frames of the same game moment.
+* In play, the whole machine stays frame-exact with MAME only until stage 1 starts: the game's five-frame unpacking of
+  the stage takes the core's 68000 a frame less than MAME's, and from there the core is up to two frames ahead (its
+  68000 otherwise runs within 2 % of MAME's speed; `docs/hardware.md`, section 8). The pictures of every state are
+  identical to MAME's (the corpus above); it is the game's timeline that drifts.
+* The frame-for-frame comparison with MAME 0.289 (above) covers what the scripted inputs and the stage byte reach: one
+  player with the default ninja, the bosses of stages 1 and 2, sampled frames of every stage. Later bosses, the ending
+  and play with two to four players are not in the corpus.
 * Gameplay has been simulated only into the start of stage 1 for this build, and the MASK ROM CHECK's sprite
   (10K-22K) and PCM (1D, 2D) results were still running in the bench when this was written (the sprite ROM window at
   `482000` is Monster Maulers' with this board's 4 MB + 1 MB layout).
 * The tile blending follows the current MAME (each tile with its own mix code), not 0.289's; the additive mode
-  likewise (`docs/hardware.md`, section 4).
-* SHDPRISEL's shadow conditions 1 and 2 (the "topmost screen" comparison the current MAME added) are not modelled.
+  likewise (`docs/hardware.md`, section 4). Nothing the corpora and a per-frame watch of every stage reach tells the
+  two apart: the game uses tile mix code 1 only, and no sprite mix codes or additive codes (`docs/hardware.md`,
+  section 8).
+* SHDPRISEL's shadow conditions 1 and 2 (the "topmost screen" comparison the current MAME added) are not modelled; the
+  game does not use them (SHDPRISEL is 0x3F in every corpus frame with shadows).
 
 ## Repository layout
 
@@ -98,8 +107,8 @@ Coin; up to four joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for th
 | `modules/` | vendored TG68K.C, tv80 and CRT Adjust |
 | `sys/` | the MiSTer framework (identical to Template_MiSTer) |
 | `mra/` | the five MRAs, generated by `tools/make_mra.py` |
-| `sim/` | Verilator benches: the whole machine (`run_mw.sh`), the MiSTer top level end to end (`emu/run_emu.sh`: loader check, fast load, raster, Scale, scandoubler, CRT Adjust, Flip Screen, EEPROM save path), lint |
-| `tools/` | MRA generator, ROM image builder and checker (`mra_build.py`, `mw_rom.py`), the boot-skip patch for the benches, generators of `rtl/data` |
+| `sim/` | Verilator benches: the whole machine (`run_mw.sh`), the frozen-state frame bench (`run_frames.sh`: the video pipeline from a MAME state, against MAME's snapshot), the MiSTer top level end to end (`emu/run_emu.sh`: loader check, fast load, raster, Scale, scandoubler, CRT Adjust, Flip Screen, EEPROM save path), lint |
+| `tools/` | MRA generator, ROM image builder and checker (`mra_build.py`, `mw_rom.py`), the boot-skip patch for the benches, the MAME probes (`lua/`) and runners (`mame_run.ps1`, `make_corpus.ps1`), the comparisons (`cmp_frame.py`, `cmp_state.py`, `cmp_lag.py`, `mixcodes.py`), generators of `rtl/data` |
 | `docs/` | `hardware.md`, `mister-memory.md` |
 
 ## Building
@@ -118,6 +127,15 @@ python3 tools/mra_build.py "mra/Mystic Warriors (World ver EAA).mra" mystwarr.zi
 python3 tools/mw_rom.py mystwarr.zip mystwarr.rom mystwarr                                       # against MAME's regions
 BACKDOOR=1 SKIPBOOT=1 TRACE=1 SNAPEVERY=50 sim/run_mw.sh mystwarr.rom mystwarr.nv 600 out/mw
 python3 tools/rgb2png.py out/mw.f600.rgb f600.png 2
+```
+
+MAME 0.289 is run by `tools/mame_run.ps1` with the probes of `tools/lua/` (the paths of MAME, its ROMs and a work
+directory are its parameters); `tools/make_corpus.ps1` makes a corpus of frozen states with MAME's snapshots, and
+`sim/run_frames.sh` renders it and compares:
+
+```
+tools/make_corpus.ps1 -Dir C:\work\states_play -Frames 600,800,1000 -Schedule play
+sim/run_frames.sh /mnt/c/work/states_play mystwarr.rom
 ```
 
 ## Credits
