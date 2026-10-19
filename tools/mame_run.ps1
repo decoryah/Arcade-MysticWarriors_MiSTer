@@ -10,7 +10,8 @@ param(
   [string]$Mame = 'C:\repos\mame0289\mame.exe',
   [string]$RomPath = 'C:\repos\mame0289\roms',
   [string]$Work = 'C:\repos\mw_work\mame',
-  [string]$SnapDir = ''
+  [string]$SnapDir = '',
+  [string[]]$MameArgs = @()       # more MAME options, e.g. '-joystick_contradictory'
 )
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $lua = if (Test-Path $Script) { (Resolve-Path $Script).Path } else { Join-Path $here "lua\$Script" }
@@ -23,7 +24,7 @@ foreach ($k in $Env.Keys) { Set-Item -Path "Env:$k" -Value ([string]$Env[$k]) }
 try {
   & $Mame $Machine -rompath $RomPath -video none -sound none -nothrottle -skip_gameinfo -window `
     -cfg_directory "$Work\cfg" -nvram_directory "$Work\nvram" -snapshot_directory $SnapDir `
-    -autoboot_script $lua -seconds_to_run $Seconds 2>&1 | Select-Object -Last 5
+    -autoboot_script $lua -seconds_to_run $Seconds @MameArgs 2>&1 | Select-Object -Last 5
 } finally {
   foreach ($k in $Env.Keys) { Remove-Item -Path "Env:$k" -ErrorAction SilentlyContinue }
 }

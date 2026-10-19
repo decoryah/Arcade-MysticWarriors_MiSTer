@@ -11,8 +11,9 @@
 //   SNAPEVERY=n        ... and every n-th frame
 //   SCHED=survey|play  scripted inputs (coin, start, buttons), by frame
 //   SCHEDLAG=n         apply the SCHED inputs n frames later
-//   SCHEDLINE=n        apply the SCHED / KEYS inputs at raster line n after the frame's end, not at the end (261:
-//                      where MAME's frame notifier, and so tools/lua/dump_state.lua's SCHEDULE, applies them)
+//   SCHEDLINE=n[:p]    apply the SCHED / KEYS inputs at raster line n, pixel p after the frame's end, not at the end
+//                      (249:144: MAME's frame notifier, where tools/lua/dump_state.lua's SCHEDULE sets them; MAME's
+//                      ports take them a frame later, so compare with SCHEDLAG=-1 there)
 //   BACKDOOR=1         place the image straight into the SDRAM model (the loader's address arithmetic, without
 //                      the 16 MB of streaming); the streamed load is the default
 //   PATCH=a:hh..,..    patch the image's 68000 program before it is loaded (a simulation shortcut, e.g. past the
@@ -24,9 +25,11 @@
 //   TRACE=1            one line a frame in <prefix>.trace
 //   TESTSW=1           hold the test switch (IN1 bit 2, low = on)
 //   DUMPSTATE=a,b,c    at the end of those frames, write the video chips' registers and RAMs to <prefix>.state_<N>.txt
-//   DUMPLINE=n         ... at raster line n after the frame's end instead (261: the instant of MAME's frame update,
-//                      where tools/lua/dump_state.lua takes its states, mw_core OBJ_BUILD_LINE)
+//   DUMPLINE=n[:p]     ... at raster line n, pixel p after the frame's end instead (249:144: the instant of MAME's frame
+//                      update, where tools/lua/dump_state.lua takes its states; mw_core's OBJ_BUILD_LINE / _HPOS)
 //   ROMCHK=1           compare every tile / sprite read the renderers complete with the image
+//   RDLOG=n            from frame n on, every 68000 read of the controls (494000-494003) to <prefix>.reads:
+//                      frame, raster line, pixel in the line
 #include "Vtb_mw_top.h"
 #include "Vtb_mw_top___024root.h"
 #include "verilated.h"
@@ -116,7 +119,12 @@ int main(int argc, char **argv) {
 
     std::set<int> snaps = parse_list(getenv("SNAPFRAMES"));
     std::set<int> dumps = parse_list(getenv("DUMPSTATE"));
-    const int dumpline = getenv("DUMPLINE") ? atoi(getenv("DUMPLINE")) : -1;
+    // a raster position "line[:pixel]"
+    auto parse_pos = [](const char *e, int &line, int &pix) {
+        line = -1; pix = 0;
+        if (e && *e) { line = atoi(e); const char *c = strchr(e, ':'); if (c) pix = atoi(c + 1); }
+    };
+    int dumpline, dumppix; parse_pos(getenv("DUMPLINE"), dumpline, dumppix);
     int snapevery = getenv("SNAPEVERY") ? atoi(getenv("SNAPEVERY")) : 0;
     // TESTAT=n: the test switch pressed from frame n on (the service menu); KEYS=f:mask:len,...: player 1's bits in
     // mask (bit0 left, 1 right, 2 up, 3 down, 4-6 buttons, 7 start) held for len frames from frame f
@@ -134,13 +142,16 @@ int main(int argc, char **argv) {
     const char *sch = getenv("SCHED");
     bool survey = sch && !strcmp(sch, "survey"), play = sch && !strcmp(sch, "play");
     int schedlag = getenv("SCHEDLAG") ? atoi(getenv("SCHEDLAG")) : 0;
-    const int schedline = getenv("SCHEDLINE") ? atoi(getenv("SCHEDLINE")) : -1;
+    int schedline, schedpix; parse_pos(getenv("SCHEDLINE"), schedline, schedpix);
     bool want_audio = getenv("AUDIO") && atoi(getenv("AUDIO"));
     FILE *tr = (getenv("TRACE") && atoi(getenv("TRACE"))) ? fopen((prefix + ".trace").c_str(), "w") : nullptr;
     // PCLOG=n: the 68000's first n opcode fetches (a run of the same few addresses, a loop, is written once)
     long pclog_n = getenv("PCLOG") ? atol(getenv("PCLOG")) : 0;
     FILE *pcl = pclog_n ? fopen((prefix + ".pclog").c_str(), "w") : nullptr;
     unsigned pcl_prev[8] = {0}; int pcl_i = 0; long pcl_rep = 0;
+    const int rdlog = getenv("RDLOG") ? atoi(getenv("RDLOG")) : -1;
+    FILE *rdl = rdlog >= 0 ? fopen((prefix + ".reads").c_str(), "w") : nullptr;
+    unsigned hpos = 0;          // pixel periods since the raster line began
 
     dut = new Vtb_mw_top;
     // MAME's idle IN1 (496002): bit 7 unused DIP 1, bit 6 two players, bit 5 common coin mechanism, bit 4 stereo,
@@ -279,12 +290,7 @@ int main(int argc, char **argv) {
         if (want_audio && dut->snd_valid) { audio.push_back((short)dut->snd_l); audio.push_back((short)dut->snd_r); }
         if (dut->dbg_zstep) zsteps++;
         if (dut->dbg_vcount != vc_last) {
-            vc_last = dut->dbg_vcount; if (dut->dbg_overrun) overruns++;
-            if (schedline >= 0 && (int)vc_last == schedline && frame > 0) apply_inputs();
-            if (dumpline >= 0 && (int)vc_last == dumpline && dumps.count(frame)) {
-                char path[512]; snprintf(path, sizeof path, "%s.state_%d.txt", prefix.c_str(), frame);
-                dump_state(path, frame);
-            }
+            vc_last = dut->dbg_vcount; hpos = 0; if (dut->dbg_overrun) overruns++;
         }
         if (dut->dbg_overrun_line) {
             ovl_events++;
@@ -292,6 +298,8 @@ int main(int argc, char **argv) {
         }
         if (dut->dbg_step) {
             steps++; frame_steps++;
+            if (rdl && frame >= rdlog && dut->dbg_busstate == 2 && (dut->dbg_addr & 0xfffffc) == 0x494000)
+                fprintf(rdl, "%d,%u,%u\n", frame, vc_last, hpos);
             if (dut->dbg_busstate == 0) {
                 last_pc = dut->dbg_addr; pc_hist[last_pc]++;
                 if (pcl && pclog_n > 0) {
@@ -311,6 +319,13 @@ int main(int argc, char **argv) {
         if (dut->dbg_irq4 && !prev_irq4) irq4_seen = true;
         prev_irq2 = dut->dbg_irq2; prev_irq4 = dut->dbg_irq4;
         if (dut->cen_pix) {
+            // hpos: the pixel period of the line that this tick ends (0 the first after the line began)
+            if (schedline >= 0 && (int)vc_last == schedline && (int)hpos == schedpix && frame > 0) apply_inputs();
+            if (dumpline >= 0 && (int)vc_last == dumpline && (int)hpos == dumppix && dumps.count(frame)) {
+                char path[512]; snprintf(path, sizeof path, "%s.state_%d.txt", prefix.c_str(), frame);
+                dump_state(path, frame);
+            }
+            hpos++;
             if (dut->de) {
                 if (y >= 0 && y < VIS_H && x < VIS_W) fb[y * VIS_W + x] = dut->rgb;
                 x++; de_px++;
@@ -369,6 +384,7 @@ int main(int argc, char **argv) {
         }
     }
     if (tr) fclose(tr);
+    if (rdl) fclose(rdl);
     delete dut;
     return 0;
 }

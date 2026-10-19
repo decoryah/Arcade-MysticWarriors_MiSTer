@@ -9,6 +9,9 @@
 --                          layer can be isolated for diffing
 --   SCHEDULE=survey|play|none   the scripted inputs (default none: attract mode only); the same
 --                          inputs by frame as the system bench's SCHED (sim/tb_mw.cpp)
+--   SCHEDLAG=n             use the schedule's frame f - n at frame f (n may be negative). A value set here reaches
+--                          the game one frame later than the frame it is set in (MAME's input ports take their new
+--                          values in its own frame notifier, which runs before this one)
 --   SKIPBOOT=1             the system bench's shortcut over the power-on RAM / ROM check: the
 --                          patch in SKIPBOOT_FILE (default tools/skipboot.txt), applied by read taps
 --   SERVICE=1              the test switch held from frame SERVICE_FROM (default 1200)
@@ -200,6 +203,7 @@ if p12 then
   rt, up, dn, lf = p12.fields["P1 Right"], p12.fields["P1 Up"], p12.fields["P1 Down"], p12.fields["P1 Left"]
 end
 local SCHED = os.getenv("SCHEDULE") or "none"
+local SCHEDLAG = tonumber(os.getenv("SCHEDLAG") or "0")
 local svc = nil
 local svc_from = tonumber(os.getenv("SERVICE_FROM") or "1200")
 if os.getenv("SERVICE") == "1" then
@@ -210,7 +214,7 @@ end
 KEEP.notif = emu.add_machine_frame_notifier(function()
   f = f + 1
   if svc and f >= svc_from then svc:set_value(1) end
-  local n = f
+  local n = f - SCHEDLAG
   if SCHED == "survey" and coin then
     coin:set_value((n > 200 and (n % 120) < 8) and 1 or 0)
     start:set_value((n > 260 and (n % 90) < 8 and (n % 120) >= 8) and 1 or 0)

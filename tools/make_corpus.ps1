@@ -6,7 +6,8 @@ param(
   [string]$Schedule = 'none',
   [string]$Machine = 'mystwarr',
   [int]$Skip = 1,
-  [hashtable]$ExtraEnv = @{}
+  [hashtable]$ExtraEnv = @{},
+  [string[]]$MameArgs = @()
 )
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Dir = [System.IO.Path]::GetFullPath($Dir)
@@ -16,7 +17,7 @@ New-Item -ItemType Directory -Force $Dir, $tmp | Out-Null
 $sorted = $Frames | Sort-Object
 $env = @{ DUMPFRAMES = ($sorted -join ','); DUMPDIR = $Dir; SCHEDULE = $Schedule; SKIPBOOT = "$Skip" }
 foreach ($k in $ExtraEnv.Keys) { $env[$k] = $ExtraEnv[$k] }
-& "$here\mame_run.ps1" -Script dump_state.lua -Machine $Machine -Seconds 7200 -SnapDir $tmp -Env $env | Select-Object -Last 2
+& "$here\mame_run.ps1" -Script dump_state.lua -Machine $Machine -Seconds 7200 -SnapDir $tmp -Env $env -MameArgs $MameArgs | Select-Object -Last 2
 $pngs = Get-ChildItem (Join-Path $tmp $Machine) -Filter *.png | Sort-Object Name
 if ($pngs.Count -ne $sorted.Count) { Write-Warning "$($pngs.Count) snapshots for $($sorted.Count) frames" }
 for ($i = 0; $i -lt [Math]::Min($pngs.Count, $sorted.Count); $i++) {
