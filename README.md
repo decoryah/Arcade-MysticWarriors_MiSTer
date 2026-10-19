@@ -98,6 +98,9 @@ Coin; up to four joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for th
   section 8).
 * SHDPRISEL's shadow conditions 1 and 2 (the "topmost screen" comparison the current MAME added) are not modelled; the
   game does not use them (SHDPRISEL is 0x3F in every corpus frame with shadows).
+* Sprite codes beyond the 4 MB sprite ROM (0x8000 and up) read as blank: `mw_mem` maps the sprite row address without
+  wrapping it, where MAME takes the code modulo the ROM's tile count. Only the power-on RAM test's patterns in the
+  sprite RAM were seen to reach them (frame 82 of a boot, in the bench); no game sprite in the 678 compared frames did.
 
 ## Repository layout
 

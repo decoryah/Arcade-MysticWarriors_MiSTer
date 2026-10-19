@@ -23,6 +23,11 @@ The OSD's version line reads `v261019`.
 ### Checked
 
 - **On a real MiSTer:** this RBF with these MRAs was tested by the repository owner, and it works.
+- **The released sources, re-checked in simulation** (an export of the commit the RBF was built from): the whole
+  machine from power-on, where the game's ROM RAM CHECK reports every item OK (700 frames, 16.7 M tile ROM reads
+  compared with the image, 0 wrong); the MiSTer top level with the plain picture, Scale (HV-Integer, also with Full
+  Screen), HQ2x, forced_scandoubler, CRT Adjust (at zero byte-identical to off) and the fast load (all 7.47 M words in
+  place): every run passes.
 - **ROM path:** `tools/mw_rom.py` rebuilds MAME's memory regions from the zip by MAME's own loading rules
   (`ROM_LOADTILE_WORD`, `ROM_LOAD64_WORD`, ...) and compares them with the image each MRA builds: all five sets
   identical in every region.
@@ -80,6 +85,9 @@ README.
   reached.
 - SHDPRISEL's shadow conditions 1 and 2 are not modelled; the game does not use them (SHDPRISEL is 0x3F in every
   compared frame with shadows).
+- Sprite codes beyond the 4 MB sprite ROM (0x8000 and up) read as blank here; MAME wraps them onto the ROM. Only the
+  power-on RAM test's patterns in the sprite RAM were seen to reach them (for a moment during the check); no game
+  sprite in the 678 compared frames did.
 
 ### Credits
 
