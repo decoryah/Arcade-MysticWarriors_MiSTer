@@ -1,5 +1,5 @@
 # One frozen-state corpus from MAME: state_<N>.txt (tools/lua/dump_state.lua) and snap_<N>.png for each frame.
-#   tools/make_corpus.ps1 -Dir C:\repos\mw_work\states_play -Frames 300,500,700 -Schedule play [-Machine mystwarr] [-Skip 1]
+#   tools/make_corpus.ps1 -Dir C:\repos\mystwarr-mister\work\ref\play -Frames 300,500,700 -Schedule play [-Machine mystwarr] [-Skip 1]
 param(
   [Parameter(Mandatory = $true)][string]$Dir,
   [Parameter(Mandatory = $true)][int[]]$Frames,

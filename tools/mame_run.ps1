@@ -9,7 +9,7 @@ param(
   [int]$Seconds = 1800,
   [string]$Mame = 'C:\repos\mame0289\mame.exe',
   [string]$RomPath = 'C:\repos\mame0289\roms',
-  [string]$Work = 'C:\repos\mw_work\mame',
+  [string]$Work = 'C:\repos\mystwarr-mister\work\mame_run',
   [string]$SnapDir = '',
   [string[]]$MameArgs = @()       # more MAME options, e.g. '-joystick_contradictory'
 )
