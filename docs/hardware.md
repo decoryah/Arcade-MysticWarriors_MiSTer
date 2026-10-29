@@ -146,7 +146,10 @@ stops at 2,047).
 As Monster Maulers' (`docs/hardware.md` there) without the SUB1 plane, with the tile layers' mix code taken per pixel
 (above) and the additive mode as the current MAME has it: an additive mix code's level is not inverted
 (`k054338_device::set_alpha_level`), a sprite adds `s * a >> 8` and a tile `s * (a + 1) >> 8`, clamped.
-Brightness, shadows and the tie order are Monster Maulers'.
+Brightness, shadows and the tie order are Monster Maulers'. With the OSD's Colours on Board DAC (the default) the
+brightness is not applied in the mixer: the colours are blended unscaled, the frontmost pixel's brightness goes on
+beside them, and the top level applies it after the K054573 curve, as the board's K054574 sets the DAC current
+(README, "Colours"). On MAME the mixer is as described here.
 
 ### Sprite list timing
 MAME takes the sprite list at its screen update (vblank end, `VIDEO_UPDATE_AFTER_VBLANK`); the core copies the sprite

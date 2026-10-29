@@ -39,6 +39,8 @@ module tb_frame_top #(
     input  logic  [8:0] px,
     input  logic        px_valid,
     output logic [23:0] rgb,
+    input  logic        bri_post,       // the mixer's Board DAC mode (BRIPOST=1): colours unscaled, the brightness on bri
+    output logic  [7:0] bri,
     output logic        unsupported,
     output logic        shadow_overlap,
     output logic  [5:0] dbg_dr_st,      // the sprite drawer's state, for the line-time histogram
@@ -216,7 +218,7 @@ module tb_frame_top #(
         .spr_opq(spr_opq & px_valid), .spr_pen(spr_pen), .spr_pri(spr_pri), .spr_mix(spr_mix),
         .spr_shadow(spr_shadow & px_valid), .spr_shtab(spr_shtab), .spr_shpri(spr_shpri),
         .k55regs(k55regs), .k38regs(k38regs),
-        .pal_addr(pal_addr), .pal_q(pal_q), .rgb(rgb),
+        .pal_addr(pal_addr), .pal_q(pal_q), .rgb(rgb), .bri_post(bri_post), .bri(bri),
         .mix_zero(mix_zero), .mix_full(mix_full)
     );
     /* verilator lint_off UNUSEDSIGNAL */

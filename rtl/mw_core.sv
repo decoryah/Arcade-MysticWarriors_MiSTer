@@ -90,6 +90,8 @@ module mw_core #(
     // video, 6 MHz pixel rate on cen_pix
     output logic        cen_pix,
     output logic [23:0] rgb,
+    output logic  [7:0] bri,                // Colours = Board DAC (bri_post): the brightness to apply after the DAC curve
+    input  logic        bri_post,
     output logic        hsync,
     output logic        vsync,
     output logic        de,
@@ -382,7 +384,7 @@ module mw_core #(
         .spr_opq(spr_opq & px_valid), .spr_pen(spr_pen), .spr_pri(spr_pri), .spr_mix(spr_mix),
         .spr_shadow(spr_shadow & px_valid), .spr_shtab(spr_shtab), .spr_shpri(spr_shpri),
         .k55regs(k55regs), .k38regs(k38regs),
-        .pal_addr(pal_raddr), .pal_q(pal_q), .rgb(rgb),
+        .pal_addr(pal_raddr), .pal_q(pal_q), .rgb(rgb), .bri_post(bri_post), .bri(bri),
         .mix_zero(mix_zero), .mix_full(mix_full)
     );
 

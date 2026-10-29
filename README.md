@@ -8,7 +8,8 @@ picture at a 6 MHz pixel clock.
 
 No ROMs or other copyrighted data are in this repository; you supply your own MAME `mystwarr.zip`.
 
-**Status.** First release (20261019): **tested on a real MiSTer by the repository owner, and it works**; simulated with
+**Status.** Second release (20261029, the Colours option: the board's video DAC curve): **tested on a real MiSTer by
+the repository owner, and it works** (as was the first, 20261019); simulated with
 the real game programs and compared with MAME 0.289 frame for frame. See "What is verified" for exactly what has been
 checked and how, and "Known differences / open points" for what has not.
 
@@ -41,6 +42,7 @@ checked and how, and "Known differences / open points" for what has not.
 | Scale | Normal, V-Integer, HV-Integer, Narrower HV-Integer, HV-Integer+ | Integer scaling for the HDMI scaler (the framework's `video_freak`) |
 | Flip Screen | Off, On | The picture turned 180 degrees on every output (a frame buffer in the DDR3: one frame of delay while on) |
 | Scandoubler Fx | None, HQ2x, CRT 25%, CRT 50%, CRT 75% | |
+| Colours | Board DAC, MAME | Board DAC (the default) puts R, G and B through the curve of the board's video DAC, darker mid tones as on a real board, with the fades' brightness applied after the curve as the board does; MAME is the palette as it is, as MAME shows it (and every build before this option). On every output. Switch MiSTer's own gamma correction off with Board DAC. See "Colours" below |
 | CRT Adjust | submenu: Off, On; H-Size 0..+3 / -16..-1, H-Position -48..+16, V-Shift -16..+15 | Fits the picture to a 15 kHz analog output. Does nothing while the scandoubler is in use |
 | Number of Players | 2, 4 | The board's DIP |
 | Coin Mechanism | Common, Independent | The board's DIP |
@@ -68,6 +70,45 @@ Coin; up to four joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for th
 | rotating plane | none | K053936 | **none** |
 | players | 3 | 2 | **4** |
 
+## Colours
+
+A real board's picture has darker mid tones than MAME's. MAME shows the palette as straight 8-bit values, which is what
+the colour chip computes; the board's video DAC is not straight. The model and the option are the Gaiapolis core's
+(the same chips: Gaiapolis's board, PWB353396A, from Franck78's schematic; Mystic Warriors is among the games of Ace's
+054573 / 054574 reproductions):
+
+* The K054338 colour chip puts 8-bit R, G and B straight into three Konami K054573 DAC modules; its 8-bit brightness
+  output goes to a K054574, which sets the current each 054573 runs on. SiliconRE's trace of the 054338 shows plain
+  integer arithmetic inside and no curve, so the curve can only be in the DAC.
+* The 054573, traced from the Gerbers and BOM of Ace's reproduction
+  ([UKVAC](https://www.ukvac.com/forum/threads/konami-054573-and-054574-reproductions.84054/)): each data bit drives an
+  open-collector buffer (74LS07) that, while the bit is 0, pulls one summing node down through its own resistor (49k,
+  24k, 12k, 6k, 3.1k, 1.7k, 800R and 380R for D0..D7); the node is fed by the brightness current and has 1.2k to ground,
+  and two diodes and an emitter follower take it to the output. A conductance divider, not a resistor ladder: the
+  output rises faster towards the top, so mid tones come out darker than a linear DAC gives. The resistors are not
+  exact powers of two, so four carries (0x1F to 0x20, 0x5F, 0x9F, 0xDF) step back a little, as on the board.
+* Against a recording of a Mystic Warriors PCB (a 1CC run; its attract mode, 100 frames matched one for one with MAME
+  0.289's frames of the Japanese set, 32 colours from areas of one colour): the circuit with Gaiapolis's 14.5 mA is
+  1.8-2.0 of 255 off (rms, each channel with the capture's own gain and offset, or a full colour matrix), a straight
+  line, MAME's, 2.8-4.3; the misfit of the straight line is in the bright half, up to 64 levels. The best plain gamma
+  curve (2.0-2.2) is 1.0-1.2 off, closer on the most common colours but further than the circuit in the darks and the
+  brights. Every current from 15 to 25 mA gives the same curve within a level, so the footage confirms the shape and
+  the Gaiapolis value stands.
+* Board DAC maps code 0 to black and 0xFF, the brightest value this game writes, to full white, with the circuit's
+  curve in between (0x40 becomes 21, 0x80 60, 0xC0 123). `tools/make_dac_table.py` writes the table
+  (`rtl/data/k054573_dac.hex`).
+* **Brightness.** The game fades with the K054338's brightness (layers B, C and D and the sprites use its register 11,
+  which drops to 0x77 and climbs back in the intro's fades). MAME scales each colour by it before mixing; on the board
+  it is the DAC current, the same factor on the finished colour after the curve, so curve(c) x bri, which keeps more of
+  a faded picture than curve(c x bri). With Board DAC the mixer blends the colours unscaled and hands the brightness of
+  the frontmost pixel on (the K055555 gives the 054338 that pixel's code), and the top level applies it after the table.
+  That the 054574 is linear is assumed, not measured.
+
+It is a model, not a measurement: the resistor values are the repro's (the original modules are sealed), the
+transistors and diodes generic, and the current comes from footage whose own levels are not known. An oscilloscope on
+a real board's RGB output would settle it. Switch MiSTer's own gamma correction (Video processing) off with Board DAC,
+or the curve is applied twice; with Colours on MAME a MiSTer gamma file can still be used.
+
 ## What is verified
 
 | | |
@@ -78,8 +119,9 @@ Coin; up to four joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for th
 | Whole machine against MAME 0.289 | The system bench's chip state at raster line 249, pixel 144 (the instant of MAME's frame update) equals MAME's at the same frame in every register, palette, sprite RAM and tile RAM word, **frame for frame (lag 0)**, and its next picture equals MAME's snapshot: the attract mode at frames 60, 120 ... 900, and scripted play (coin, start, the ninja select, the story scene) from frame 300 to 1,130. The comparison moved IRQ2, IRQ4 and the sprite list's instant to MAME's raster lines (240, 0 and 249) |
 | Whole machine | `sim/run_mw.sh`: the real 68000 and Z80 programs from reset through `mw_mem`, the SDRAM controller and a behavioural SDRAM. The game's own power-on **ROM RAM CHECK passes every item** (the RAMs, the program and sound ROMs, the EEPROM: "VER. EA A"), then the intro ("Beware of 'SKULL' enterprise on!", its red flash and fade, the dusk city and the Skull castle with its parallax scroll) and, with a coin from the scripted inputs, the title screen with the five ninjas. The title screen's text rows and the HUD (1UP / HIGH SCORE / 2UP frames and digits) sit at exactly the pixel rows and columns of MAME's snapshots of the game. Over 900 frames: 1.68 M tile and 27,280 sprite ROM reads by the renderers compared with the image, 0 wrong; no line overran; IRQ2 and IRQ4 in every frame once the game enables them; the music plays in stereo from the first second. With scripted inputs: coin, start, the SELECT NINJA screen, a ninja chosen, the story scene in the dojo that follows and the start of stage 1 (the BMR street with its START banner and the 1UP arrow, the player blinking in on alternate frames, shuriken thrown and a crate broken; 1,300 frames, no line overran). The service menu (test switch): the MAIN MENU, and its **MASK ROM CHECK reports all twelve ROMs OK**: the tile ROMs 1H, 1K and 3H read through the K056832's ROM window at `680000` (both its modes and the bank register), the sprite ROMs 10K, 12K, 17K, 19K, 20K and 22K through the K055673's window at `482000` (this board's 4 MB + 1 MB layout), and the PCM ROMs 1D and 2D, each against the checksums in the game's program (3,300 frames) |
 | MiSTer top level | `sim/emu/run_emu.sh`: `MysticWarriors.sv` itself with the framework's video path: the fast load replayed from the DDR3 and all 7.47 M SDRAM words compared with the image (0 wrong), frame period exactly 1,622,016 clocks (59.1856 Hz), 224 rows of 288 pixels starting 79 pixels after the hsync pulse, the EEPROM read back through the save path. Every Scale mode asks the scaler for the size the framework's rule gives (at 1080p V-Integer 1194 x 896, HV-Integer and Narrower 1152 x 896, HV-Integer+ 1440 x 896; at 4K 2592 x 2016 and 2880 x 2016; HV-Integer with Full Screen 1728 x 896); with HQ2x, CRT 25 % and MiSTer.ini's forced_scandoubler the monitor gets 448 rows in 528 lines a frame (CRT 25 % and forced_scandoubler hand the scaler the plain picture unchanged, HQ2x its filtered one); CRT Adjust at zero gives the picture and raster of CRT Adjust off, byte for byte, and with amounts set the frame period stays whole |
-| Quartus | Quartus Prime Lite 17.0.2 compiles the project for the 5CSEBA6U23I7: 46 % of the ALMs (19,131), 519 of 553 M10K, 65 DSPs; every clock's slack positive (the 96 MHz core clock +0.811 ns setup / +0.242 ns hold; `releases/*.summary`) |
-| On a real MiSTer | `releases/mysticwarriors_20261019.rbf` with the MRAs of `mra/`: tested by the repository owner, and it works |
+| Colours | `sim/emu/run_emu.sh` with the fast load into the intro (250 frames): Colours on MAME gives the picture of the build before the option byte for byte, and Board DAC the same picture with every channel looked up in the table (`sim/emu/dac_check.py`, 0 values off); with `NOLOAD`, the plain picture, CRT Adjust at zero, forced_scandoubler and HV-Integer with Full Screen keep their geometry and raster exactly (the core's picture and all its timing leave a pixel later). The frame bench with the mixer in its Board DAC mode (`BRIPOST=1`): on the intro's fades (brightness 0x77 and 0xD4) every pixel's unscaled colour times its brightness is MAME's pixel, 64,512 of 64,512; the 15 attract frames in MAME mode still pixel-identical to MAME |
+| Quartus | Quartus Prime Lite 17.0.2 compiles the project for the 5CSEBA6U23I7: 46 % of the ALMs (19,145), 519 of 553 M10K, 68 DSPs; every clock's slack positive (the 96 MHz core clock +0.611 ns setup / +0.245 ns hold; `releases/*.summary`) |
+| On a real MiSTer | `releases/mysticwarriors_20261029.rbf` with the MRAs of `mra/`: tested by the repository owner, and it works, the Colours option on Board DAC included (and before it `mysticwarriors_20261019.rbf`) |
 
 ## Known differences / open points
 
@@ -113,7 +155,7 @@ Coin; up to four joysticks. From the keyboard: 1-4 start, 5-8 coin and F2 for th
 | `sys/` | the MiSTer framework (identical to Template_MiSTer) |
 | `mra/` | the five MRAs, generated by `tools/make_mra.py` |
 | `sim/` | Verilator benches: the whole machine (`run_mw.sh`), the frozen-state frame bench (`run_frames.sh`: the video pipeline from a MAME state, against MAME's snapshot), the MiSTer top level end to end (`emu/run_emu.sh`: loader check, fast load, raster, Scale, scandoubler, CRT Adjust, Flip Screen, EEPROM save path), lint |
-| `tools/` | MRA generator, ROM image builder and checker (`mra_build.py`, `mw_rom.py`), the release zip (`package.py`: `dist/MysticWarriors_MiSTer_<date>.zip`), the boot-skip patch for the benches, the MAME probes (`lua/`) and runners (`mame_run.ps1`, `make_corpus.ps1`), the comparisons (`cmp_frame.py`, `cmp_state.py`, `cmp_lag.py`, `mixcodes.py`), generators of `rtl/data` |
+| `tools/` | MRA generator, ROM image builder and checker (`mra_build.py`, `mw_rom.py`), the release zip (`package.py`: `dist/MysticWarriors_MiSTer_<date>.zip`), the boot-skip patch for the benches, the MAME probes (`lua/`) and runners (`mame_run.ps1`, `make_corpus.ps1`), the comparisons (`cmp_frame.py`, `cmp_state.py`, `cmp_lag.py`, `mixcodes.py`), generators of `rtl/data` (`make_dac_table.py`: the Colours option's Board DAC table, the 054573 model) |
 | `docs/` | `hardware.md`, `mister-memory.md` |
 
 ## Building
@@ -161,6 +203,11 @@ sim/run_frames.sh /mnt/c/work/states_play mystwarr.rom
   (`modules/crt-adjust/crt_adjust.sv`; GPL-3.0 or later).
 * **furrtek** -- [SiliconRE](https://github.com/furrtek/SiliconRE/tree/master/Konami)'s silicon-traced models and notes of
   the K053252 timing chip, the K054338 and K055555, through the cores above.
+* **Ace** -- the Gerbers and BOM of the
+  [K054573 / K054574 reproductions](https://www.ukvac.com/forum/threads/konami-054573-and-054574-reproductions.84054/),
+  and **Franck78** -- the [Konami Gaiapolis schematic](https://github.com/Franck78/The-Konami-Gaiapolis-schematic), the
+  video DAC chain: with SiliconRE's K054338 trace, the basis of the Colours option, worked out in the repository owner's
+  Gaiapolis core and brought over here.
 * **Jose Tejada (jotego)** -- JTFRAME's MiSTer SDRAM clock phase and read-capture timing, which this core's PLL and
   controller settings follow; and, with the other authors of the independent Konami cores read as references (jlrh's
   `konami-fpga`, which also has a Mystic Warriors core), the cross-checks of the Konami chips.

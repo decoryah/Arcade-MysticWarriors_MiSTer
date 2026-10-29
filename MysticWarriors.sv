@@ -85,6 +85,7 @@ localparam CONF_STR = {
 	"O[34:32],Scale,Normal,V-Integer,HV-Integer,Narrower HV-Integer,HV-Integer+;",
 	"O[12],Flip Screen,Off,On;",
 	"O[5:3],Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
+	"O[35],Colours,Board DAC,MAME;",
 	"P1,CRT Adjust;",
 	"P1O[14],CRT Adjust,Off,On;",
 	"H1P1O[19:15],CRT H-Size,0,+1,+2,+3,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
@@ -343,6 +344,7 @@ assign      ioctl_din = eep_q;
 
 wire        mw_cen_pix, mw_hs, mw_vs, mw_de, mw_hde, mw_vb;
 wire [23:0] mw_rgb;
+wire  [7:0] mw_bri;
 wire [15:0] mw_snd_l, mw_snd_r;
 wire        mw_snd_valid;
 wire [23:0] dbg_addr; wire [15:0] dbg_data; wire [1:0] dbg_busstate; wire [9:0] dbg_objcount; wire [8:0] dbg_vcount;
@@ -364,7 +366,7 @@ mw_core #(.HEXDIR("rtl/data")) mw
 	.pcm_req(pcm_req), .pcm_addr(pcm_addr), .pcm_ack(pcm_ack), .pcm_q(pcm_q),
 	.eep_ld_we(eep_we), .eep_ld_addr(eep_addr), .eep_ld_wdata(eep_wdata), .eep_ld_q(eep_q), .eep_dirty(eep_dirty),
 	.in_p1_p2(in_p1_p2), .in_p3_p4(in_p3_p4), .in0(in0), .in1(in1),
-	.cen_pix(mw_cen_pix), .rgb(mw_rgb), .hsync(mw_hs), .vsync(mw_vs), .de(mw_de), .hde(mw_hde), .vblank(mw_vb),
+	.cen_pix(mw_cen_pix), .rgb(mw_rgb), .bri(mw_bri), .bri_post(~status[35]), .hsync(mw_hs), .vsync(mw_vs), .de(mw_de), .hde(mw_hde), .vblank(mw_vb),
 	.snd_l(mw_snd_l), .snd_r(mw_snd_r), .snd_valid(mw_snd_valid),
 	.dbg_addr(dbg_addr), .dbg_data(dbg_data), .dbg_busstate(dbg_busstate), .dbg_step(dbg_step),
 	.dbg_irq2(dbg_irq2), .dbg_irq4(dbg_irq4), .dbg_irq_ctrl(dbg_irq_ctrl),
@@ -440,11 +442,48 @@ wire [95:0] ovl_status_d = {
 // path from there through the overlay and the flip stage is longer than a clock; the panel is not time-critical
 reg  [95:0] ovl_status;
 always @(posedge clk_sys) ovl_status <= ovl_status_d;
+
+// Colours: the board's video DAC. Each 8-bit colour goes to a Konami 054573 per channel, a conductance divider
+// whose output rises faster near the top than a linear DAC (MAME) gives, so the mid tones are darker; the
+// K054338's brightness is the current the 054573s run on (through a 054574), applied after the curve. Board DAC
+// (the default) looks each channel up in that curve (tools/make_dac_table.py; black stays 0, 0xff is 255) and
+// scales it by the frontmost pixel's brightness, which the mixer then leaves out of the colour; MAME passes the
+// mixer's colour, brightness included, as MAME draws it. The lookup and the scale take three clocks, more than
+// the two the mixer's colour is settled before the pixel tick, so the picture and all its timing are taken a
+// pixel later here, at the tick, in both modes alike
+wire        colours_mame = status[35];
+(* romstyle = "logic" *) reg [7:0] dac_tab [256];
+initial $readmemh("rtl/data/k054573_dac.hex", dac_tab);
+reg [23:0] pq_rgb;
+reg  [7:0] pq_bri;
+reg        pq_hs, pq_vs, pq_de, pq_hde, pq_vb;
+reg  [8:0] pq_vcount;
+always @(posedge clk_sys) if (mw_cen_pix) begin
+	pq_rgb <= mw_rgb; pq_bri <= mw_bri;
+	pq_hs <= mw_hs; pq_vs <= mw_vs; pq_de <= mw_de; pq_hde <= mw_hde; pq_vb <= mw_vb; pq_vcount <= dbg_vcount;
+end
+reg [23:0] dac_c;
+reg  [7:0] dac_b;
+reg [15:0] dac_xr, dac_xg, dac_xb;
+reg [23:0] dac_rgb;
+function [7:0] div255(input [15:0] x);          // floor(x / 255) for x = c * b, as the mixer divides
+	reg [16:0] y;
+	begin y = {1'b0, x} + {9'd0, x[15:8]} + 17'd1; div255 = y[15:8]; end
+endfunction
+always @(posedge clk_sys) begin
+	dac_c   <= {dac_tab[pq_rgb[23:16]], dac_tab[pq_rgb[15:8]], dac_tab[pq_rgb[7:0]]};
+	dac_b   <= pq_bri;
+	dac_xr  <= dac_c[23:16] * dac_b;
+	dac_xg  <= dac_c[15:8]  * dac_b;
+	dac_xb  <= dac_c[7:0]   * dac_b;
+	dac_rgb <= colours_mame ? pq_rgb : {div255(dac_xr), div255(dac_xg), div255(dac_xb)};
+end
+
 wire [7:0] ovl_r, ovl_g, ovl_b;
 dbg_overlay ovl
 (
-	.clk(clk_sys), .cen_pix(mw_cen_pix), .enable(status[9]), .de(mw_de), .vsync(mw_vs),
-	.r_in(mw_rgb[23:16]), .g_in(mw_rgb[15:8]), .b_in(mw_rgb[7:0]),
+	.clk(clk_sys), .cen_pix(mw_cen_pix), .enable(status[9]), .de(pq_de), .vsync(pq_vs),
+	.r_in(dac_rgb[23:16]), .g_in(dac_rgb[15:8]), .b_in(dac_rgb[7:0]),
 	.status(ovl_status), .r_out(ovl_r), .g_out(ovl_g), .b_out(ovl_b)
 );
 
@@ -464,7 +503,7 @@ assign AUDIO_R = status[8] ? aud_l : aud_r;      // mono: the left mix on both
 // its line timing from the horizontal blank's edges and without them loses the vertical sync altogether (a
 // frozen picture and no sync on the monitor). hblank_c, the combined blank, is what the CRT Adjust module
 // and Flip Screen want.
-wire hblank_c = ~mw_de;
+wire hblank_c = ~pq_de;
 
 // Flip Screen: the finished picture (overlay included) turned 180 degrees, one frame late, through
 // two frame buffers in the DDR3; the picture is untouched when it is off (target/mister/flip_buf.sv)
@@ -472,7 +511,7 @@ wire [23:0] flip_rgb;
 flip_buf #(.W(288), .H(224)) u_flip
 (
 	.clk(clk_sys), .cen(mw_cen_pix), .flip_en(status[12]),
-	.rgb_i({ovl_r, ovl_g, ovl_b}), .de_i(mw_de), .vs_i(mw_vs), .rgb_o(flip_rgb),
+	.rgb_i({ovl_r, ovl_g, ovl_b}), .de_i(pq_de), .vs_i(pq_vs), .rgb_o(flip_rgb),
 	.wr_hold(1'b0), .wr_we(fb_we), .wr_addr(fb_addr), .wr_din(fb_din),
 	.rd_req(fl_rd), .rd_addr(fl_addr), .rd_burst(fl_burst), .rd_busy(fl_busy), .rd_data(ddr_dout), .rd_ready(fl_dready),
 	.underrun(fb_underrun)
@@ -483,7 +522,7 @@ flip_buf #(.W(288), .H(224)) u_flip
 reg [23:0] vq_rgb;
 reg        vq_hb, vq_hbh, vq_vb, vq_hs, vq_vs, vq_ce;
 always @(posedge clk_sys) begin
-	vq_rgb <= flip_rgb; vq_hb <= hblank_c; vq_hbh <= ~mw_hde; vq_vb <= mw_vb; vq_hs <= mw_hs; vq_vs <= mw_vs; vq_ce <= mw_cen_pix;
+	vq_rgb <= flip_rgb; vq_hb <= hblank_c; vq_hbh <= ~pq_hde; vq_vb <= pq_vb; vq_hs <= pq_hs; vq_vs <= pq_vs; vq_ce <= mw_cen_pix;
 end
 
 // CRT Adjust: the size, horizontal position and vertical position of the picture on a 15 kHz analog output
@@ -494,7 +533,7 @@ end
 wire crt_sd = (|status[5:3]) | forced_scandoubler;
 // the visible rows of mw_video (VIS_Y0, VIS_H): the module needs the vertical blank of the *next* line (see below)
 localparam [8:0] VIS_Y0 = 9'd16, VIS_H = 9'd224;
-wire crt_vb_next = ~(dbg_vcount >= VIS_Y0 - 9'd1 && dbg_vcount < VIS_Y0 + VIS_H - 9'd1);
+wire crt_vb_next = ~(pq_vcount >= VIS_Y0 - 9'd1 && pq_vcount < VIS_Y0 + VIS_H - 9'd1);
 
 // the OSD values, as the menu counts them: H-Size 0..+3 then -16..-1, H-Position 0..+16 then -48..-1, V-Shift
 // signed 5-bit. The picture is 288 pixels in a line of 384; it starts 79 pixels after the hsync pulse starts and

@@ -31,6 +31,8 @@
 //     konamigx_mixer sets it as each tile layer is drawn, from the layer's V_BRI
 //     field and K054338 registers 11/12, and the sprites are drawn with whatever the
 //     last tile layer left (for the first of them, the last layer of the frame before).
+//     With bri_post (Colours = Board DAC) the colours are not scaled; the frontmost
+//     drawn slot's brightness goes out on `bri` instead, for after the DAC curve.
 //   * Shadow: the pixel's colour as RGB15 expanded, plus the K054338's signed
 //     delta for the shadow table (-80 for table 3), clamped unless CLIPSL.
 //
@@ -69,6 +71,13 @@ module mw_mixer (
     input  logic [23:0] pal_q,
 
     output logic [23:0] rgb,
+
+    // Colours = Board DAC: the colours are blended unscaled and the brightness of the frontmost drawn pixel goes out
+    // on `bri` beside them, for the top level to apply after the DAC curve, as the board's K054574 does (the
+    // brightness is the DAC's current there, not a digital scale). Off (MAME): each colour is scaled as above
+    // and `bri` is not used.
+    input  logic        bri_post,
+    output logic  [7:0] bri,
 
     // the K054338 alpha levels, for the sprite list builder (mix codes 1-3)
     output logic  [3:1] mix_zero,       // level 0 and not additive: the sprite is not drawn
@@ -235,7 +244,7 @@ module mw_mixer (
     logic  [1:0] s1_kind, s2_kind, s3_kind, s4_kind;
     logic  [7:0] s1_alp, s2_alp, s3_alp, s4_alp;
     logic        s1_a1, s2_a1, s3_a1;
-    logic  [7:0] s1_bri, s2_bri;
+    logic  [7:0] s1_bri, s2_bri, sx_bri, s3_bri, s4_bri;
     logic        s1_first, s2_first, s3_first, s4_first;
     logic  [1:0] s1_stab, s2_stab, s3_stab, s4_stab;
 
@@ -262,11 +271,13 @@ module mw_mixer (
     logic        sx_v, sx_first, sx_a1;
     logic  [1:0] sx_kind, sx_stab;
     logic  [7:0] sx_alp;
+    wire [7:0] s2_scale = bri_post ? 8'hff : s2_bri;           // 0xff: c' = c
     always_ff @(posedge clk) begin
-        x_r <= pal_q[23:16] * s2_bri;
-        x_g <= pal_q[15:8]  * s2_bri;
-        x_b <= pal_q[7:0]   * s2_bri;
+        x_r <= pal_q[23:16] * s2_scale;
+        x_g <= pal_q[15:8]  * s2_scale;
+        x_b <= pal_q[7:0]   * s2_scale;
         sx_v <= s2_v; sx_kind <= s2_kind; sx_alp <= s2_alp; sx_a1 <= s2_a1; sx_first <= s2_first; sx_stab <= s2_stab;
+        sx_bri <= s2_bri;
     end
     function automatic logic [7:0] fin255(input logic [15:0] x);
         logic [16:0] y;
@@ -279,6 +290,7 @@ module mw_mixer (
         sc_g <= fin255(x_g);
         sc_b <= fin255(x_b);
         s3_v <= sx_v; s3_kind <= sx_kind; s3_alp <= sx_alp; s3_a1 <= sx_a1; s3_first <= sx_first; s3_stab <= sx_stab;
+        s3_bri <= sx_bri;
     end
 
     // t+4: source * level, a stage ahead of the painter's step (which then has the
@@ -292,7 +304,7 @@ module mw_mixer (
         sa_g <= sc_g * s3_alp + (add1 ? {9'd0, sc_g} : 17'd0);
         sa_b <= sc_b * s3_alp + (add1 ? {9'd0, sc_b} : 17'd0);
         cs_r <= sc_r; cs_g <= sc_g; cs_b <= sc_b;
-        s4_v <= s3_v; s4_kind <= s3_kind; s4_alp <= s3_alp; s4_first <= s3_first; s4_stab <= s3_stab;
+        s4_v <= s3_v; s4_kind <= s3_kind; s4_alp <= s3_alp; s4_first <= s3_first; s4_stab <= s3_stab; s4_bri <= s3_bri;
         s4_ia <= 9'd256 - {1'b0, s3_alp};
     end
 
@@ -347,6 +359,14 @@ module mw_mixer (
         end
     end
     assign rgb = bd_q ? bdc_q : dst;
+
+    // the frontmost drawn slot's brightness (a shadow keeps the one under it); the backdrop's is 0xff
+    logic [7:0] top_bri;
+    always_ff @(posedge clk) begin
+        if (s4_first) top_bri <= 8'hff;
+        if (s4_v && s4_kind != 2'd3) top_bri <= s4_bri;
+    end
+    assign bri = bd_q ? 8'hff : top_bri;
 
     /* verilator lint_off UNUSEDSIGNAL */
     wire unused = ^{k38regs[0][15:8], reset, s4_alp};

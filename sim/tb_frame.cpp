@@ -142,6 +142,9 @@ int main(int argc, char **argv) {
     dut->tab_we = 0;
 
     std::vector<unsigned> out(VIS_H * VIS_W, 0);
+    // BRIPOST=1: the mixer in its Board DAC mode (colours unscaled), each pixel's brightness in the output's top byte
+    const bool bripost = getenv("BRIPOST") && atoi(getenv("BRIPOST"));
+    dut->bri_post = bripost;
     long worst = 0, worst_tm = 0, worst_dr = 0;
     auto render_line = [&](int raster_y) -> long {
         dut->line_start = 1; dut->line = raster_y; tick(); dut->line_start = 0;
@@ -195,7 +198,7 @@ int main(int argc, char **argv) {
                 // fixed phases after it
                 dut->px = x; dut->cen_pix = 1; tick(); dut->cen_pix = 0; n++;
                 for (int k = 0; k < PIXCLK - 1; k++) { tick(); n++; }
-                out[y * VIS_W + x] = dut->rgb;
+                out[y * VIS_W + x] = dut->rgb | (bripost ? (unsigned)dut->bri << 24 : 0u);
             }
             if (realtime) {
                 for (; n < (long)HTOTAL * PIXCLK; n++) tick();
